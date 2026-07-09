@@ -1,0 +1,439 @@
+{% extends 'index.html' %}
+{% load static %}
+
+{% block title %}{{ category.name }} - Courses{% endblock %}
+
+{% block content %}
+<style>
+  /* ── reuse same base as search_results.html ── */
+  .cat-results-section {
+    padding: 2rem 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: 50vh;
+  }
+
+  /* breadcrumb */
+  .cat-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: .82rem;
+    color: #888;
+    margin-bottom: 1.4rem;
+  }
+  .cat-breadcrumb a { color: #1a3a8f; font-weight: 600; text-decoration: none; }
+  .cat-breadcrumb a:hover { text-decoration: underline; }
+  .cat-breadcrumb span { color: #1a1a2e; font-weight: 700; }
+  .cat-breadcrumb .sep { font-size: .65rem; color: #ccc; }
+
+  /* header strip */
+  .cat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e7ebf5;
+  }
+  .cat-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .cat-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cat-name-badge {
+    background: linear-gradient(135deg, #1a3a8f, #0d2060);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: .9rem;
+    font-weight: 600;
+  }
+  .cat-count-badge {
+    background: #f0f4ff;
+    color: #1a3a8f;
+    padding: 6px 14px;
+    border-radius: 18px;
+    font-size: .85rem;
+    font-weight: 600;
+  }
+
+  /* result group wrapper */
+  .search-result-group {
+    margin-bottom: 2.5rem;
+    background: #fff;
+    border: 1px solid #e7ebf5;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(26,58,143,.04);
+  }
+  .search-result-group h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 1.2rem;
+    padding-bottom: .8rem;
+    border-bottom: 2px solid #f0f2f8;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .search-result-group h3 span {
+    background: #1a3a8f;
+    color: #fff;
+    padding: 3px 12px;
+    border-radius: 14px;
+    font-size: .8rem;
+    font-weight: 600;
+    margin-left: auto;
+  }
+
+  /* ── E-Library PDF cards (identical to search_results) ── */
+  .pdf-grid-search {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.2rem;
+    align-items: stretch;
+  }
+  .pdf-card-search {
+    background: #fff;
+    border: 1px solid #e7ebf5;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    transition: all .2s ease;
+  }
+  .pdf-card-search:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(26,58,143,.15);
+    text-decoration: none;
+    color: inherit;
+  }
+  .pdf-thumb-search {
+    height: 140px;
+    background: linear-gradient(135deg, #f5f7fa, #e9edf5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .pdf-thumb-search img { width: 100%; height: 100%; object-fit: cover; }
+  .pdf-thumb-search .pdf-emoji { font-size: 3rem; }
+  .pdf-body-search {
+    padding: 1rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .pdf-body-search h3 {
+    font-size: .95rem;
+    font-weight: 600;
+    color: #222;
+    margin: 0 0 .4rem;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+  }
+  .pdf-categorySearch { font-size: .78rem; color: #888; margin-bottom: .6rem; }
+  .pdf-foot-search {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .8rem;
+  }
+  .price-now-search { font-size: 1.05rem; font-weight: 700; color: #1a3a8f; }
+  .price-old-search { font-size: .85rem; color: #999; text-decoration: line-through; margin-left: 6px; }
+  .pdf-pages-search { font-size: .78rem; color: #888; }
+  .buy-btn-search {
+    display: block;
+    width: 100%;
+    padding: 9px;
+    background: linear-gradient(135deg, #1a3a8f, #0d2060);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    text-align: center;
+    font-size: .9rem;
+    cursor: pointer;
+    transition: all .2s ease;
+    text-decoration: none;
+    margin-top: auto;
+  }
+  .buy-btn-search:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(26,58,143,.3);
+    color: #fff;
+    text-decoration: none;
+  }
+
+  /* ── Physical book cards (identical to search_results) ── */
+  .book-grid-search {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.2rem;
+    align-items: stretch;
+  }
+  .book-card-search {
+    background: #fff;
+    border: 1px solid #e7ebf5;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    transition: all .2s ease;
+  }
+  .book-card-search:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(26,58,143,.15);
+    text-decoration: none;
+    color: inherit;
+  }
+  .book-thumb-search {
+    height: 160px;
+    background: linear-gradient(135deg, #fff9e6, #ffe066);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .book-thumb-search img { width: 100%; height: 100%; object-fit: cover; }
+  .book-thumb-search .book-emoji { font-size: 3.5rem; }
+  .book-body-search {
+    padding: 1rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .b-tag-search {
+    display: inline-block;
+    padding: 3px 10px;
+    background: #f0f4ff;
+    color: #1a3a8f;
+    border-radius: 12px;
+    font-size: .75rem;
+    font-weight: 600;
+    margin-bottom: .5rem;
+    align-self: flex-start;
+  }
+  .book-body-search h3 {
+    font-size: .95rem;
+    font-weight: 600;
+    color: #222;
+    margin: 0 0 .6rem;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+  }
+  .b-price-search { font-size: 1.1rem; font-weight: 700; color: #1a3a8f; margin-bottom: .8rem; }
+  .b-orig-search { font-size: .85rem; color: #999; text-decoration: line-through; margin-left: 6px; font-weight: 400; }
+  .cart-btn-search {
+    display: block;
+    width: 100%;
+    padding: 9px;
+    background: #fff;
+    color: #1a3a8f;
+    border: 2px solid #1a3a8f;
+    border-radius: 8px;
+    font-weight: 600;
+    text-align: center;
+    font-size: .9rem;
+    cursor: pointer;
+    transition: all .2s ease;
+    text-decoration: none;
+    margin-top: auto;
+  }
+  .cart-btn-search:hover {
+    background: #1a3a8f;
+    color: #fff;
+    transform: translateY(-2px);
+    text-decoration: none;
+  }
+
+  /* back button */
+  .back-to-home {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #f5f7fa;
+    color: #333;
+    border: 1.5px solid #dde2ee;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    margin-bottom: 1.5rem;
+    transition: all .2s ease;
+  }
+  .back-to-home:hover { background: #e9edf5; transform: translateY(-2px); text-decoration: none; }
+
+  /* empty state */
+  .no-results {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: #fff;
+    border: 1px solid #e7ebf5;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(26,58,143,.04);
+  }
+  .no-results i { font-size: 4rem; display: block; margin-bottom: 1.5rem; color: #ddd; }
+  .no-results h3 { font-size: 1.4rem; font-weight: 600; color: #333; margin-bottom: .5rem; }
+  .no-results p { color: #888; font-size: 1rem; margin: 0; }
+
+  @media (max-width: 768px) {
+    .cat-results-section { padding: 1rem; }
+    .cat-header { flex-direction: column; align-items: flex-start; }
+    .pdf-grid-search, .book-grid-search { grid-template-columns: repeat(2, 1fr); gap: .8rem; }
+  }
+  @media (max-width: 480px) {
+    .pdf-grid-search, .book-grid-search { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="cat-results-section">
+
+  <!-- Back button -->
+  <a href="{% url 'search' %}" class="back-to-home">
+    <i class="fa-solid fa-arrow-left"></i> Back to Search
+  </a>
+
+  <!-- Breadcrumb -->
+  <nav class="cat-breadcrumb">
+    <a href="{% url 'home' %}"><i class="fa-solid fa-home"></i> Home</a>
+    <span class="sep"><i class="fa-solid fa-chevron-right"></i></span>
+    <a href="{% url 'search' %}">Search</a>
+    <span class="sep"><i class="fa-solid fa-chevron-right"></i></span>
+    <span>{{ category.name }}</span>
+  </nav>
+
+  <!-- Header -->
+  <div class="cat-header">
+    <div class="cat-header-left">
+      <h2>
+        {% if category.image %}
+          <img src="{{ category.image.url }}" alt="" style="width:32px;height:32px;border-radius:8px;object-fit:cover;">
+        {% else %}
+          <i class="fa-solid fa-folder-open"></i>
+        {% endif %}
+        {{ category.name }}
+      </h2>
+      <span class="cat-name-badge">{{ category.name }}</span>
+      <span class="cat-count-badge">{{ total_courses }} Course{{ total_courses|pluralize }}</span>
+    </div>
+  </div>
+
+  {% if elibrary_courses or hardcopy_courses %}
+
+    <!-- E-Library Section -->
+    {% if elibrary_courses %}
+    <div class="search-result-group">
+      <h3>
+        <i class="fa-solid fa-file-pdf"></i> E-Library Courses
+        <span>{{ elibrary_courses.count }}</span>
+      </h3>
+      <div class="pdf-grid-search">
+        {% for course in elibrary_courses %}
+        <div class="pdf-card-search">
+          <a href="{% url 'elibrary_detail' course.pk %}" style="text-decoration:none;color:inherit;">
+            <div class="pdf-thumb-search">
+              {% if course.thumbnail %}
+                <img src="{{ course.thumbnail.url }}" alt="{{ course.title|default:course.name }}">
+              {% elif course.image %}
+                <img src="{{ course.image.url }}" alt="{{ course.title|default:course.name }}">
+              {% else %}
+                <span class="pdf-emoji">📘</span>
+              {% endif %}
+            </div>
+            <div class="pdf-body-search">
+              <h3>{{ course.title|default:course.name }}</h3>
+              <div class="pdf-categorySearch">{{ category.name }}</div>
+              <div class="pdf-foot-search">
+                <div>
+                  <span class="price-now-search">{% if course.price %}₹{{ course.price }}{% else %}Free{% endif %}</span>
+                  {% if course.original_price %}<span class="price-old-search">₹{{ course.original_price }}</span>{% endif %}
+                </div>
+                {% if course.pages %}<div class="pdf-pages-search">{{ course.pages }} pages</div>{% endif %}
+              </div>
+            </div>
+          </a>
+          <div style="padding:0 1rem 1rem;">
+            <a href="{% url 'elibrary_detail' course.pk %}" class="buy-btn-search">👁️ View Details</a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Hardcopy Books Section -->
+    {% if hardcopy_courses %}
+    <div class="search-result-group">
+      <h3>
+        <i class="fa-solid fa-book"></i> Physical Books
+        <span>{{ hardcopy_courses.count }}</span>
+      </h3>
+      <div class="book-grid-search">
+        {% for book in hardcopy_courses %}
+        <div class="book-card-search">
+          <a href="{% url 'hard_book_detail' book.pk %}" style="text-decoration:none;color:inherit;">
+            <div class="book-thumb-search">
+              {% if book.thumbnail %}
+                <img src="{{ book.thumbnail.url }}" alt="{{ book.title|default:book.name }}">
+              {% elif book.image %}
+                <img src="{{ book.image.url }}" alt="{{ book.title|default:book.name }}">
+              {% else %}
+                <span class="book-emoji">📖</span>
+              {% endif %}
+            </div>
+            <div class="book-body-search">
+              <div class="b-tag-search">Hardcopy</div>
+              <h3>{{ book.title|default:book.name }}</h3>
+              <div class="b-price-search">
+                {% if book.price %}₹{{ book.price }}{% else %}Free{% endif %}
+                {% if book.original_price %}<span class="b-orig-search">₹{{ book.original_price }}</span>{% endif %}
+              </div>
+            </div>
+          </a>
+          <div style="padding:0 1rem 1rem;">
+            <a href="{% url 'hard_book_detail' book.pk %}" class="cart-btn-search">🛒 View Details</a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  {% else %}
+  <div class="no-results">
+    <i>📭</i>
+    <h3>No Courses in {{ category.name }}</h3>
+    <p>We don't have any courses here yet. Check back soon!</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

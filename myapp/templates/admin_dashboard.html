@@ -1,0 +1,581 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - BoosterNotes</title>
+  <link rel="stylesheet" href=" {% static "css/admin_dashboard.css" %} ">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      font-size: .82rem;
+      font-weight: 600;
+      text-decoration: none;
+      font-family: 'Poppins', sans-serif;
+      transition: background .18s, border-color .18s;
+      white-space: nowrap;
+    }
+    .back-btn:hover {
+      background: rgba(255,255,255,0.22);
+      border-color: rgba(255,255,255,0.5);
+      color: #fff;
+    }
+    .back-btn .back-arrow { font-size: .9rem; }
+
+    /* ── Upload Loader Overlay ───────────────────────────────────────── */
+    #upload-loader {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: rgba(10, 18, 50, 0.72);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+    }
+    #upload-loader.active { display: flex; }
+
+    .loader-box {
+      background: #fff;
+      border-radius: 20px;
+      padding: 40px 48px;
+      text-align: center;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+      min-width: 260px;
+      animation: loaderPop .25s ease;
+    }
+    @keyframes loaderPop {
+      from { transform: scale(.85); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    .spinner {
+      width: 56px;
+      height: 56px;
+      border: 5px solid #e7ebf5;
+      border-top-color: #1a3a8f;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 18px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loader-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 6px;
+    }
+    .loader-sub {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 18px;
+    }
+
+    .loader-bar-wrap {
+      background: #e7ebf5;
+      border-radius: 99px;
+      height: 6px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .loader-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #1a3a8f, #4a7de8);
+      border-radius: 99px;
+      animation: progress 3s ease forwards;
+    }
+    @keyframes progress {
+      0%   { width: 0%; }
+      40%  { width: 55%; }
+      70%  { width: 78%; }
+      90%  { width: 90%; }
+      100% { width: 95%; }
+    }
+
+    .loader-file-name {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.75rem;
+      color: #1a3a8f;
+      font-weight: 600;
+      margin-top: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+  </style>
+</head>  
+<body>
+
+  <div id="upload-loader">
+    <div class="loader-box">
+      <div class="spinner"></div>
+      <div class="loader-title">Uploading...</div>
+      <div class="loader-sub">Please wait, do not close this page</div>
+      <div class="loader-bar-wrap"><div class="loader-bar" id="loader-bar"></div></div>
+      <div class="loader-file-name" id="loader-file-name"></div>
+    </div>
+  </div>
+
+  {% block content1 %}
+    {% include "msg.html" %}
+  <nav>
+    <!-- Logo clicks go to homepage -->
+    <a href="{% url 'home' %}" class="logo-wrap">
+      <div class="logo-circle">🚀</div>
+      <div class="logo-text-block">
+        <div class="brand">BoosterNotes</div>
+        <div class="sub">Admin Panel</div>
+      </div>
+    </a>
+
+    <a href="{% url 'home' %}" class="back-btn" style="margin-left:auto;">
+      <span class="back-arrow">←</span> Back to Site
+    </a>
+    <button class="ham-btn" onclick="toggleSidebar()" type="button">☰</button>
+  </nav>
+
+  <div class="dashboard-container">
+    <aside class="sidebar" id="sidebar">
+      <ul class="sidebar-menu">
+        <li class="sidebar-item">
+          <a href=" {% url "dashboard" %} " class="sidebar-link active" onclick="showSection('dashboard')">
+            <span class="sidebar-icon">📊</span>
+            <span>Dashboard</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#users" class="sidebar-link" onclick="showSection('users')">
+            <span class="sidebar-icon">👥</span>
+            <span>User Signups</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#payments" class="sidebar-link" onclick="showSection('payments')">
+            <span class="sidebar-icon">💳</span>
+            <span>Payments</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href=" {% url "elibrary_dashboard" %} " class="sidebar-link" onclick="showSection('elibrary')">
+            <span class="sidebar-icon">📚</span>
+            <span>E-Library Courses</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href=" {% url "hard_books_list" %} " class="sidebar-link" onclick="showSection('books')">
+            <span class="sidebar-icon">📦</span>
+            <span>Hard Copy Books</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="{% url 'orders_dashboard' %}" class="sidebar-link">
+            <span class="sidebar-icon">📦</span>
+            <span>Orders</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href=" {% url "notifications_section" %} " class="sidebar-link" onclick="showSection('notifications')">
+            <span class="sidebar-icon">🔔</span>
+            <span>Notifications</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href=" {% url "coupon_list" %} " class="sidebar-link" onclick="showSection('coupons')">
+            <span class="sidebar-icon">🎟️</span>
+            <span>Coupons</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href=" {% url "category_list" %} " class="sidebar-link" onclick="showSection('categories')">
+            <span class="sidebar-icon">🎯</span>
+            <span>Categories</span>
+          </a>
+        </li>
+        <li class="sidebar-item sidebar-dropdown" id="customizationDropdown">
+          <div class="sidebar-link" onclick="toggleDropdown()">
+            <span class="sidebar-icon">🎨</span>
+            <span class="sidebar-dropdown-toggle">
+              <span>Customization</span>
+              <span class="dropdown-arrow">▼</span>
+            </span>
+          </div>
+          <ul class="sidebar-submenu">
+            <li>
+              <a href=" {% url "navbar_custom" %} " class="sidebar-sublink" onclick="showSection('navbar-custom')">
+                <span class="sublink-icon">🔝</span><span>Navbar</span>
+              </a>
+            </li>
+            <li>
+              <a href=" {% url "banner_custom" %} " class="sidebar-sublink" onclick="showSection('banner-custom')">
+                <span class="sublink-icon">🖼️</span><span>Banner</span>
+              </a>
+            </li>
+            <li>
+              <a href=" {% url "stats_custom" %} " class="sidebar-sublink" onclick="showSection('stats-custom')">
+                <span class="sublink-icon">📈</span><span>Stats Section</span>
+              </a>
+            </li>
+            <li>
+              <a href=" {% url "about_custom" %} " class="sidebar-sublink" onclick="showSection('about-custom')">
+                <span class="sublink-icon">ℹ️</span><span>About Section</span>
+              </a>
+            </li>
+            <li>
+              <a href=" {% url "footer_custom" %} " class="sidebar-sublink" onclick="showSection('footer-custom')">
+                <span class="sublink-icon">🔻</span><span>Footer</span>
+              </a>
+            </li>
+          </ul>
+        </li>
+        <li class="sidebar-item">
+          <a href="{% url 'backup_panel' %}" class="sidebar-link">
+            <span class="sidebar-icon">🗄️</span>
+            <span>DB Backup</span>
+          </a>
+        </li>
+      </ul>
+    </aside>
+{% block content %}
+    <main class="main-content">
+      <div id="dashboard-section" class="content-section">
+        <div class="page-header">
+          <h1 class="page-title">Dashboard Overview</h1>
+          <p class="page-subtitle">Welcome back! Here's what's happening today.</p>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue">👥</div>
+            <div class="stat-info">
+              <h3>{{ total_users }}</h3>
+              <p>Total Users</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">💰</div>
+            <div class="stat-info">
+              <h3>₹{{ total_revenue|floatformat:0 }}</h3>
+              <p>Total Revenue</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange">✅</div>
+            <div class="stat-info">
+              <h3>{{ completed_orders }}</h3>
+              <p>Completed Orders</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple">⏳</div>
+            <div class="stat-info">
+              <h3>{{ pending_orders }}</h3>
+              <p>Pending Orders</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-card">
+          <div class="card-header">
+            <h2 class="card-title">Recent Orders</h2>
+            <a href="{% url 'orders_dashboard' %}" class="btn btn-secondary">View All</a>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Order #</th>
+                  <th>User</th>
+                  <th>Items</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for order in recent_transactions %}
+                <tr>
+                  <td>#{{ order.order_number }}</td>
+                  <td>{{ order.full_name }}</td>
+                  <td>
+                    {% for item in order.items.all %}
+                      <span style="font-size:.8rem;">{{ item.item_name }}{% if not forloop.last %}, {% endif %}</span>
+                    {% empty %}—{% endfor %}
+                  </td>
+                  <td>₹{{ order.grand_total|floatformat:0 }}</td>
+                  <td>
+                    {% if order.status == 'paid' %}
+                      <span class="badge badge-success">Paid</span>
+                    {% elif order.status == 'pending' %}
+                      <span class="badge badge-warning">Pending</span>
+                    {% elif order.status == 'cancelled' %}
+                      <span class="badge badge-danger">Cancelled</span>
+                    {% else %}
+                      <span class="badge badge-secondary">{{ order.get_status_display }}</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ order.created_at|date:"Y-m-d" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="6" style="text-align:center;color:#888;">No orders yet.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="users-section" class="content-section" style="display:none;">
+        <div class="page-header">
+          <h1 class="page-title">User Signups</h1>
+          <p class="page-subtitle">Manage registered users</p>
+        </div>
+        <div class="content-card">
+          <div class="card-header">
+            <h2 class="card-title">All Users</h2>
+            <a href="{% url 'add_user' %}" class="btn btn-primary">➕ Add User</a>
+          </div>
+          {% if messages %}
+          <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Joined</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {% for user in users %}
+                <tr>
+                  <td>{{ user.id }}</td>
+                  <td>{{ user.get_full_name|default:user.username }}</td>
+                  <td>{{ user.email|default:"N/A" }}</td>
+                  <td>{{ user.phone|default:"N/A" }}</td>
+                  <td>{{ user.date_joined|date:"Y-m-d" }}</td>
+                  <td>
+                    {% if user.is_active %}<span class="badge badge-success">Active</span>
+                    {% else %}<span class="badge badge-danger">Inactive</span>{% endif %}
+                  </td>
+                  <td>
+                    <div class="action-btns">
+                      <a href="{% url 'edit_user' user.id %}" class="action-btn" title="Edit">✏️</a>
+                      <form method="post" action="{% url 'delete_user' user.id %}" style="display:inline;" onsubmit="return confirm('Delete {{ user.username }}?');">
+                        {% csrf_token %}
+                        <button type="submit" class="action-btn" title="Delete">🗑️</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" style="text-align:center;">No users found.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="payments-section" class="content-section" style="display:none;">
+        <div class="page-header">
+          <h1 class="page-title">Payment Dashboard</h1>
+          <p class="page-subtitle">Track all transactions</p>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon green">💰</div><div class="stat-info"><h3>₹{{ total_revenue|floatformat:0 }}</h3><p>Total Revenue</p></div></div>
+          <div class="stat-card"><div class="stat-icon blue">✅</div><div class="stat-info"><h3>{{ completed_orders }}</h3><p>Completed</p></div></div>
+          <div class="stat-card"><div class="stat-icon orange">⏳</div><div class="stat-info"><h3>{{ pending_orders }}</h3><p>Pending</p></div></div>
+          <div class="stat-card"><div class="stat-icon purple">❌</div><div class="stat-info"><h3>{{ failed_orders }}</h3><p>Cancelled</p></div></div>
+        </div>
+        <div class="content-card">
+          <div class="card-header">
+            <h2 class="card-title">Recent Transactions</h2>
+            <a href="{% url 'orders_dashboard' %}" class="btn btn-secondary">View All Orders</a>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr><th>Order #</th><th>User</th><th>Items</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {% for order in recent_transactions %}
+                <tr>
+                  <td style="font-weight:600;">#{{ order.order_number }}</td>
+                  <td>{{ order.full_name }}{% if order.user %}<br><small style="color:#888;">{{ order.user.email }}</small>{% endif %}</td>
+                  <td>{% for item in order.items.all %}<span style="font-size:.8rem;display:block;">{{ item.item_name }}</span>{% empty %}—{% endfor %}</td>
+                  <td>₹{{ order.grand_total|floatformat:0 }}</td>
+                  <td style="text-transform:capitalize;">{{ order.payment_method }}</td>
+                  <td>
+                    {% if order.status == 'paid' %}<span class="badge badge-success">Paid</span>
+                    {% elif order.status == 'pending' %}<span class="badge badge-warning">Pending</span>
+                    {% elif order.status == 'cancelled' %}<span class="badge badge-danger">Cancelled</span>
+                    {% elif order.status == 'refunded' %}<span class="badge badge-secondary">Refunded</span>
+                    {% else %}<span class="badge badge-secondary">{{ order.get_status_display }}</span>{% endif %}
+                  </td>
+                  <td>{{ order.created_at|date:"d M Y" }}<br><small style="color:#aaa;">{{ order.created_at|time:"H:i" }}</small></td>
+                  <td><a href="{% url 'order_detail' order.id %}" class="action-btn" title="View">👁️</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" style="text-align:center;color:#888;padding:24px;">No transactions yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="elibrary-section" class="content-section" style="display:none;">
+        <div class="page-header"><h1 class="page-title">E-Library Courses</h1><p class="page-subtitle">Manage PDF courses</p></div>
+        <div class="content-card">
+          <div class="card-header"><h2 class="card-title">All PDF Courses</h2><button class="btn btn-primary" onclick="showAddCourseForm()">➕ Add Course</button></div>
+        </div>
+      </div>
+
+      <div id="books-section" class="content-section" style="display:none;">
+        <div class="page-header"><h1 class="page-title">Hard Copy Books</h1><p class="page-subtitle">Manage physical books inventory</p></div>
+        <div class="content-card">
+          <div class="card-header"><h2 class="card-title">All Books</h2><button class="btn btn-primary" onclick="showAddBookForm()">➕ Add Book</button></div>
+        </div>
+      </div>
+
+      <div id="categories-section" class="content-section" style="display:none;">
+        <div class="page-header"><h1 class="page-title">Category Management</h1><p class="page-subtitle">Manage exam categories</p></div>
+      </div>
+
+      <div id="stats-custom-section" class="content-section" style="display:none;">
+        <div class="page-header"><h1 class="page-title">📈 Stats Section Customization</h1><p class="page-subtitle">Update statistics displayed on homepage</p></div>
+      </div>
+
+      <div id="about-custom-section" class="content-section" style="display:none;">
+        <div class="page-header"><h1 class="page-title">ℹ️ About Section Customization</h1><p class="page-subtitle">Edit about section content</p></div>
+      </div>
+
+    </main>
+  </div>
+  {% endblock content %}
+
+  <script>
+    function showSection(sectionName) {
+      document.querySelectorAll('.content-section').forEach(section => {
+        section.style.display = 'none';
+      });
+      document.getElementById(sectionName + '-section').style.display = 'block';
+      document.querySelectorAll('.sidebar-link').forEach(link => { link.classList.remove('active'); });
+      document.querySelectorAll('.sidebar-sublink').forEach(link => { link.classList.remove('active'); });
+      if (event && event.target) {
+        const clickedLink = event.target.closest('.sidebar-link') || event.target.closest('.sidebar-sublink');
+        if (clickedLink) clickedLink.classList.add('active');
+      }
+      if (window.innerWidth <= 820) {
+        document.getElementById('sidebar').classList.remove('open');
+      }
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    function toggleDropdown() {
+      event.stopPropagation();
+      document.getElementById('customizationDropdown').classList.toggle('open');
+    }
+
+    function showAddUserForm() { alert('Add User form will open here'); }
+    function showAddCourseForm() { alert('Add Course form will open here'); }
+    function showAddBookForm() { alert('Add Book form will open here'); }
+
+    document.addEventListener('click', function(event) {
+      const sidebar = document.getElementById('sidebar');
+      const hamBtn = document.querySelector('.ham-btn');
+      if (window.innerWidth <= 820 &&
+          !sidebar.contains(event.target) &&
+          !hamBtn.contains(event.target)) {
+        sidebar.classList.remove('open');
+      }
+    });
+
+    if (window.location.hash === '#payments') showSection('payments');
+
+    (function () {
+      const loader    = document.getElementById('upload-loader');
+      const bar       = document.getElementById('loader-bar');
+      const fileLabel = document.getElementById('loader-file-name');
+      const LABELS = {
+        banner:  { title: 'Uploading Banner…',   sub: 'Saving image, please wait' },
+        logo:    { title: 'Uploading Logo…',     sub: 'Saving logo & favicon' },
+        pdf:     { title: 'Uploading PDF…',      sub: 'This may take a moment for large files' },
+        image:   { title: 'Uploading Images…',   sub: 'Saving book images' },
+        default: { title: 'Uploading…',          sub: 'Please wait, do not close this page' },
+      };
+      function getLabel(form) {
+        const action = (form.action || window.location.href).toLowerCase();
+        if (action.includes('banner')) return LABELS.banner;
+        if (action.includes('navbar')) return LABELS.logo;
+        if (action.includes('pdf') || action.includes('elibrary')) return LABELS.pdf;
+        if (action.includes('book') || action.includes('hard')) return LABELS.image;
+        const fileInput = form.querySelector('input[type="file"]');
+        if (fileInput) {
+          const accept = (fileInput.accept || '').toLowerCase();
+          if (accept.includes('pdf')) return LABELS.pdf;
+          if (accept.includes('image')) return LABELS.image;
+        }
+        return LABELS.default;
+      }
+      function showLoader(form) {
+        const lbl = getLabel(form);
+        loader.querySelector('.loader-title').textContent = lbl.title;
+        loader.querySelector('.loader-sub').textContent   = lbl.sub;
+        const fileInput = form.querySelector('input[type="file"]');
+        if (fileInput && fileInput.files && fileInput.files.length) {
+          fileLabel.textContent = '📎 ' + Array.from(fileInput.files).map(f => f.name).join(', ');
+        } else { fileLabel.textContent = ''; }
+        bar.style.animation = 'none';
+        bar.offsetHeight;
+        bar.style.animation = 'progress 3s ease forwards';
+        loader.classList.add('active');
+      }
+      function attachLoaders() {
+        document.querySelectorAll('form').forEach(function (form) {
+          if (form.dataset.loaderAttached) return;
+          form.dataset.loaderAttached = '1';
+          const hasFile = form.querySelector('input[type="file"]');
+          if (!hasFile) return;
+          form.addEventListener('submit', function (e) {
+            const actionInput = form.querySelector('input[name="action"]');
+            if (actionInput && ['delete','toggle'].includes(actionInput.value)) return;
+            const fileInputs = form.querySelectorAll('input[type="file"]');
+            const hasSelectedFile = Array.from(fileInputs).some(fi => fi.files && fi.files.length > 0);
+            if (!hasSelectedFile) return;
+            showLoader(form);
+          });
+        });
+      }
+      document.addEventListener('DOMContentLoaded', attachLoaders);
+      new MutationObserver(attachLoaders).observe(document.body, { childList: true, subtree: true });
+    })();
+  </script>
+{% endblock content1 %}
+</body>
+</html>
