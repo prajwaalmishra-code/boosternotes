@@ -467,7 +467,7 @@ def elibrary_upload_pdf(request, pk):
                 if method == 'passthrough' or saved_pct <= 0:
                     messages.success(
                         request,
-                        f'\u2705 PDF uploaded successfully! ({human_size(orig_size)} — already optimal, no compression needed)'
+                        f'\u2705 PDF uploaded successfully! ({human_size(orig_size)} \u2014 already optimal, no compression needed)'
                     )
                 else:
                     messages.success(
@@ -875,8 +875,9 @@ def elibrary_detail(request, pk):
     Public course detail page.
 
     Access rules for PDFs:
-      - is_demo=True  → freely viewable by anyone (no purchase required)
-      - is_demo=False → only viewable after a paid order for this course
+      - 1st PDF (by upload date) → always freely accessible as a demo preview
+      - is_demo=True on any PDF  → also freely accessible
+      - all other PDFs           → only accessible after a paid order
     """
     from .models import Order, OrderItem
     course = get_object_or_404(
@@ -895,10 +896,13 @@ def elibrary_detail(request, pk):
             item_id=str(pk)
         ).exists()
 
-    uploaded_pdfs = course.pdfs.all()
+    uploaded_pdfs = list(course.pdfs.all())
 
-    for pdf in uploaded_pdfs:
-        pdf.can_access = is_purchased or pdf.is_demo
+    # Mark the very first PDF as the free demo regardless of the is_demo flag.
+    # Any PDF already flagged is_demo=True is also freely accessible.
+    for idx, pdf in enumerate(uploaded_pdfs):
+        pdf.is_first_pdf = (idx == 0)
+        pdf.can_access   = is_purchased or pdf.is_demo or pdf.is_first_pdf
 
     return render(request, 'elibrary_detail.html', {
         'pdf': course,
