@@ -758,7 +758,8 @@ def delete_user(request, user_id):
         username = user.username
         user.delete()
         messages.success(request, f'User {username} deleted!')
-        return redirect('users_section')
+        # FIX: 'users_section' URL does not exist — redirect to dashboard (Signups section)
+        return redirect('dashboard')
     return redirect('dashboard')
 
 
@@ -833,16 +834,45 @@ def hard_book_detail(request, pk):
 
 
 def elibrary_detail(request, pk):
+    """
+    Public course detail page.
+
+    Access rules for PDFs:
+      - is_demo=True  → freely viewable by anyone (no purchase required)
+      - is_demo=False → only viewable after a paid order for this course
+    """
     from .models import Order, OrderItem
     course = get_object_or_404(
-        ELibraryModel.objects.select_related('category').prefetch_related(Prefetch('pdfs', queryset=ELibraryPDF.objects.filter(is_active=True).order_by('uploaded_at'))),
+        ELibraryModel.objects.select_related('category').prefetch_related(
+            Prefetch('pdfs', queryset=ELibraryPDF.objects.filter(is_active=True).order_by('uploaded_at'))
+        ),
         pk=pk, is_active=True
     )
+
     is_purchased = False
     if request.user.is_authenticated:
-        is_purchased = OrderItem.objects.filter(order__user=request.user, order__is_paid=True, item_type='pdf', item_id=str(pk)).exists()
+        is_purchased = OrderItem.objects.filter(
+            order__user=request.user,
+            order__is_paid=True,
+            item_type='pdf',
+            item_id=str(pk)
+        ).exists()
+
     uploaded_pdfs = course.pdfs.all()
-    return render(request, 'elibrary_detail.html', {'pdf': course, 'uploaded_pdfs': uploaded_pdfs, 'is_purchased': is_purchased})
+
+    # Mark each PDF so the template knows whether it can be shown freely
+    # (is_purchased grants access to all; is_demo grants access to that PDF only)
+    for pdf in uploaded_pdfs:
+        pdf.can_access = is_purchased or pdf.is_demo
+
+    return render(request, 'elibrary_detail.html', {
+        'pdf': course,
+        'uploaded_pdfs': uploaded_pdfs,
+        'is_purchased': is_purchased,
+        'navbar': _get_navbar(),
+        'footer': _get_footer(),
+        'cart_count': len(request.session.get('cart', {})),
+    })
 
 
 # ── Apply Coupon (homepage "Save to Cart" button) ───────────────────────────────
