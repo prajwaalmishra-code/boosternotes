@@ -506,8 +506,6 @@ def elibrary_upload_pdf(request, pk):
                         f'{human_size(orig_size)} \u2192 {human_size(comp_size)} (saved {saved_pct}\u00a0%)'
                     )
 
-                # FIX: use reverse() with the correct named URL so the
-                # redirect lands on the real upload page, not a ghost path.
                 upload_url = reverse('elibrary_upload_pdf', args=[str(course.pk)])
                 return JsonResponse({'success': True, 'redirect': upload_url})
             else:
@@ -529,6 +527,90 @@ def elibrary_pdf_delete(request, pk):
         pdf.delete()
         messages.success(request, 'PDF deleted successfully!')
     return redirect('elibrary_dashboard')
+
+
+@login_required
+def elibrary_pdf_replace(request, pk):
+    """
+    Replace an existing PDF file for a course while keeping its metadata
+    (title, demo flag, order) intact.
+    """
+    pdf = get_object_or_404(ELibraryPDF, pk=pk)
+    course = pdf.course
+    if request.method == 'POST':
+        uploaded_file = request.FILES.get('pdf_file')
+        if not uploaded_file:
+            messages.error(request, 'Please select a PDF file to upload.')
+            return redirect('elibrary_upload_pdf', pk=str(course.pk))
+
+        # Delete old file from Dropbox
+        if pdf.dropbox_path:
+            DropboxManager.delete_file(pdf.dropbox_path)
+
+        original_name = uploaded_file.name
+        compressed_bytes, orig_size, comp_size, method = compress_pdf(uploaded_file)
+        saved_pct = round((1 - comp_size / orig_size) * 100) if orig_size else 0
+
+        compressed_file      = ContentFile(compressed_bytes, name=original_name)
+        compressed_file.size = comp_size
+
+        result = DropboxManager.upload_file(
+            compressed_file,
+            original_name,
+            folder_path=DropboxPaths.elibrary_pdfs(course.name),
+        )
+
+        if result['success']:
+            pdf.dropbox_path = result['dropbox_path']
+            pdf.save(update_fields=['dropbox_path'])
+            if method == 'passthrough' or saved_pct <= 0:
+                messages.success(request, f'\u2705 PDF replaced! ({human_size(orig_size)} \u2014 already optimal)')
+            else:
+                messages.success(
+                    request,
+                    f'\u2705 PDF replaced & compressed via {method}! '
+                    f'{human_size(orig_size)} \u2192 {human_size(comp_size)} (saved {saved_pct}\u00a0%)'
+                )
+        else:
+            messages.error(request, f"Dropbox upload failed: {result['error']}")
+
+    return redirect('elibrary_upload_pdf', pk=str(course.pk))
+
+
+@login_required
+@require_POST
+def elibrary_pdf_reorder(request, pk):
+    """
+    Accept a JSON body `{"order": ["<uuid>", "<uuid>", ...]}` and update
+    the `display_order` (or `uploaded_at`-based ordering) of PDFs for a course.
+    Falls back gracefully if the model has no `display_order` field.
+    """
+    course = get_object_or_404(ELibraryModel, pk=pk)
+    import json
+    try:
+        data = json.loads(request.body)
+        ordered_ids = data.get('order', [])
+    except (ValueError, KeyError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    if not ordered_ids:
+        return JsonResponse({'error': 'No order provided'}, status=400)
+
+    pdfs = {str(p.id): p for p in ELibraryPDF.objects.filter(course=course)}
+
+    # Support a `display_order` integer field if it exists, otherwise no-op
+    has_display_order = hasattr(ELibraryPDF, 'display_order')
+    updated = []
+    for position, pdf_id in enumerate(ordered_ids, start=1):
+        pdf = pdfs.get(pdf_id)
+        if pdf and has_display_order:
+            pdf.display_order = position
+            updated.append(pdf)
+
+    if updated:
+        ELibraryPDF.objects.bulk_update(updated, ['display_order'])
+
+    return JsonResponse({'success': True})
 
 
 def get_or_create_setting(model, defaults=None):
