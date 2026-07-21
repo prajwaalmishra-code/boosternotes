@@ -878,6 +878,10 @@ def elibrary_detail(request, pk):
       - 1st PDF (by upload date) → always freely accessible as a demo preview
       - is_demo=True on any PDF  → also freely accessible
       - all other PDFs           → only accessible after a paid order
+
+    For accessible PDFs the view generates a short-lived Dropbox temporary
+    link (~4 h) that opens the file directly in the browser with no login
+    prompt. Locked PDFs never receive a URL.
     """
     from .models import Order, OrderItem
     course = get_object_or_404(
@@ -898,11 +902,24 @@ def elibrary_detail(request, pk):
 
     uploaded_pdfs = list(course.pdfs.all())
 
-    # Mark the very first PDF as the free demo regardless of the is_demo flag.
-    # Any PDF already flagged is_demo=True is also freely accessible.
     for idx, pdf in enumerate(uploaded_pdfs):
         pdf.is_first_pdf = (idx == 0)
         pdf.can_access   = is_purchased or pdf.is_demo or pdf.is_first_pdf
+
+        if pdf.can_access and pdf.dropbox_path:
+            # ── Generate a direct, login-free temporary link from Dropbox ──
+            # files_get_temporary_link returns a ~4-hour HTTPS URL that
+            # streams the file directly — no Dropbox account needed.
+            temp_link = DropboxManager.get_temporary_link(pdf.dropbox_path)
+            pdf.preview_url  = temp_link           # open in browser / iframe
+            pdf.download_url = temp_link            # same link triggers download
+        elif pdf.can_access and pdf.pdf_file:
+            # Fallback: file stored locally (e.g. during local development)
+            pdf.preview_url  = pdf.pdf_file.url
+            pdf.download_url = pdf.pdf_file.url
+        else:
+            pdf.preview_url  = None
+            pdf.download_url = None
 
     return render(request, 'elibrary_detail.html', {
         'pdf': course,

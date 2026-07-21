@@ -241,42 +241,28 @@
               </div>
               <div class="pdf-item-date">Uploaded: {{ file.uploaded_at|date:"d M Y, h:i A" }}</div>
             </div>
-            {% if file.dropbox_path %}
-              {# Build the direct-open Dropbox link #}
-              {% with dl_link="https://www.dropbox.com/home"|add:file.dropbox_path %}
+            {% if file.preview_url %}
+              {# Temporary Dropbox link — opens directly, no login required #}
               <div>
-                <a href="{{ dl_link }}" target="_blank" class="pdf-btn">👁 View</a>
-                <a href="{{ dl_link }}&dl=1" class="pdf-btn dl">⬇ Download</a>
-              </div>
-              {% endwith %}
-            {% elif file.pdf_file %}
-              <div>
-                <a href="{{ file.pdf_file.url }}" target="_blank" class="pdf-btn">👁 View</a>
-                <a href="{{ file.pdf_file.url }}" download class="pdf-btn dl">⬇ Download</a>
+                <a href="{{ file.preview_url }}" target="_blank" rel="noopener noreferrer" class="pdf-btn">👁 View PDF</a>
+                <a href="{{ file.download_url }}" download class="pdf-btn dl">⬇ Download</a>
               </div>
             {% else %}
               <span style="font-size:.8rem;color:#c00;">File unavailable</span>
             {% endif %}
           </div>
 
-        {# ── LOCKED: purchased but this specific file locked row ────────── #}
+        {# ── PURCHASED: all remaining files unlocked ──────────────────────── #}
         {% elif is_purchased %}
           <div class="pdf-item">
             <div>
               <div class="pdf-item-name">{{ file.pdf_name }}</div>
               <div class="pdf-item-date">Uploaded: {{ file.uploaded_at|date:"d M Y, h:i A" }}</div>
             </div>
-            {% if file.dropbox_path %}
-              {% with dl_link="https://www.dropbox.com/home"|add:file.dropbox_path %}
+            {% if file.preview_url %}
               <div>
-                <a href="{{ dl_link }}" target="_blank" class="pdf-btn">👁 View</a>
-                <a href="{{ dl_link }}&dl=1" class="pdf-btn dl">⬇ Download</a>
-              </div>
-              {% endwith %}
-            {% elif file.pdf_file %}
-              <div>
-                <a href="{{ file.pdf_file.url }}" target="_blank" class="pdf-btn">👁 View</a>
-                <a href="{{ file.pdf_file.url }}" download class="pdf-btn dl">⬇ Download</a>
+                <a href="{{ file.preview_url }}" target="_blank" rel="noopener noreferrer" class="pdf-btn">👁 View PDF</a>
+                <a href="{{ file.download_url }}" download class="pdf-btn dl">⬇ Download</a>
               </div>
             {% else %}
               <span style="font-size:.8rem;color:#c00;">File unavailable</span>

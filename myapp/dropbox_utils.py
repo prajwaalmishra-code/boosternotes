@@ -38,6 +38,27 @@ class DropboxManager:
 
     # ── public API ─────────────────────────────────────────────────────────────
     @staticmethod
+    def get_temporary_link(dropbox_path):
+        """
+        Return a short-lived (~4 hours) direct HTTPS link to a Dropbox file.
+
+        Unlike shared links, temporary links:
+          - Require NO Dropbox login from the end-user.
+          - Open / stream the file directly in the browser.
+          - Cannot be listed or discovered — they are opaque one-time URLs.
+
+        Returns the URL string on success, or None on failure.
+        """
+        try:
+            dbx = DropboxManager.get_dropbox_client()
+            if not dropbox_path.startswith('/'):
+                dropbox_path = '/' + dropbox_path.lstrip('/')
+            result = dbx.files_get_temporary_link(dropbox_path)
+            return result.link
+        except Exception:
+            return None
+
+    @staticmethod
     def upload_file(file_obj, file_name, folder_path=None):
         """
         Upload a file to Dropbox using simple upload for files <= 4 MB,
