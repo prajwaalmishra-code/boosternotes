@@ -82,6 +82,9 @@ urlpatterns = [
     path('elibrary/<uuid:pk>/upload-pdf/', views.elibrary_upload_pdf, name='elibrary_upload_pdf'),
     path('elibrary/pdf/delete/<uuid:pk>/', views.elibrary_pdf_delete, name='elibrary_pdf_delete'),
 
+    # PDF proxy — streams Dropbox file through Django (no client-side Dropbox auth)
+    path('elibrary/pdf/<uuid:pdf_id>/preview/', views.elibrary_pdf_preview, name='elibrary_pdf_preview'),
+
     # Hard Books - admin
     path('hard-books/', views.hard_books_list, name='hard_books_list'),
     path('hard-books/add/', views.hard_book_add, name='hard_book_add'),
@@ -101,11 +104,7 @@ urlpatterns = [
     # DB Backup & Restore Panel
     path('db-backup/', backup_panel, name='backup_panel'),
 
-    # ── Catch-all 404 ───────────────────────────────────────────────────────
-    # Uses a negative lookahead regex to SKIP /media/ and /static/ paths
-    # so uploaded images and CSS/JS files keep working normally.
-    # Every other unmatched URL gets the branded 404 page instead of
-    # Django's yellow debug screen (works even with DEBUG=True).
+    # ── Catch-all 404 ─────────────────────────────────────────────────────────────────────
     re_path(r'^(?!media/|static/).*$', views.custom_404_view, name='custom_404'),
 ]
 

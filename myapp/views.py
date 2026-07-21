@@ -8,7 +8,10 @@ from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Q, F, Prefetch, Sum
-from django.http import JsonResponse, HttpResponseRedirect
+from django.http import (
+    JsonResponse, HttpResponseRedirect,
+    StreamingHttpResponse, HttpResponse, Http404,
+)
 from django.views.decorators.http import require_POST
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -55,7 +58,7 @@ def notifications_api(request):
     return JsonResponse({'notifications': data, 'count': len(data)})
 
 
-# ── Edit Profile ──────────────────────────────────────────────────────────────────
+# ── Edit Profile ─────────────────────────────────────────────────────────────────
 @login_required
 def edit_profile(request):
     if request.method == 'POST':
@@ -432,7 +435,6 @@ def elibrary_upload_pdf(request, pk):
     """
     Upload a PDF for an eLibrary course.
     The file is compressed (losslessly) before being sent to Dropbox.
-    The admin sees the before/after sizes in the success message.
     """
     course = get_object_or_404(ELibraryModel, pk=pk)
     if request.method == 'POST':
@@ -441,17 +443,12 @@ def elibrary_upload_pdf(request, pk):
             uploaded_file = request.FILES['pdf_file']
             original_name = uploaded_file.name
 
-            # ── Compress the PDF in-memory before upload ────────────────────────
             compressed_bytes, orig_size, comp_size, method = compress_pdf(uploaded_file)
             saved_pct = round((1 - comp_size / orig_size) * 100) if orig_size else 0
 
-            # Wrap the compressed bytes back into a file-like object that
-            # DropboxManager and Django's storage layer both understand.
             compressed_file = ContentFile(compressed_bytes, name=original_name)
-            # DropboxManager reads .size; ContentFile exposes .size via len()
             compressed_file.size = comp_size
 
-            # ── Upload to Dropbox ───────────────────────────────────────────
             result = DropboxManager.upload_file(
                 compressed_file,
                 original_name,
@@ -465,16 +462,12 @@ def elibrary_upload_pdf(request, pk):
                 pdf.save()
 
                 if method == 'passthrough' or saved_pct <= 0:
-                    messages.success(
-                        request,
-                        f'\u2705 PDF uploaded successfully! ({human_size(orig_size)} \u2014 already optimal, no compression needed)'
-                    )
+                    messages.success(request, f'\u2705 PDF uploaded! ({human_size(orig_size)} — already optimal)')
                 else:
                     messages.success(
                         request,
                         f'\u2705 PDF uploaded & compressed via {method}! '
-                        f'{human_size(orig_size)} \u2192 {human_size(comp_size)} '
-                        f'(saved {saved_pct}\u00a0%)'
+                        f'{human_size(orig_size)} \u2192 {human_size(comp_size)} (saved {saved_pct}\u00a0%)'
                     )
                 return JsonResponse({'success': True, 'redirect': f"/elibrary/upload/{course.pk}/"})
             else:
@@ -801,7 +794,7 @@ def delete_user(request, user_id):
     return redirect('dashboard')
 
 
-# ── HOME ─────────────────────────────────────────────────────────────────────────────
+# ── HOME ────────────────────────────────────────────────────────────────────────────
 def home(request):
     navbar = _get_navbar()
     if not navbar:
@@ -873,15 +866,8 @@ def hard_book_detail(request, pk):
 def elibrary_detail(request, pk):
     """
     Public course detail page.
-
-    Access rules for PDFs:
-      - 1st PDF (by upload date) → always freely accessible as a demo preview
-      - is_demo=True on any PDF  → also freely accessible
-      - all other PDFs           → only accessible after a paid order
-
-    For accessible PDFs the view generates a short-lived Dropbox temporary
-    link (~4 h) that opens the file directly in the browser with no login
-    prompt. Locked PDFs never receive a URL.
+    Passes a Django-hosted proxy URL for each accessible PDF so the
+    browser NEVER talks to Dropbox directly.
     """
     from .models import Order, OrderItem
     course = get_object_or_404(
@@ -902,24 +888,17 @@ def elibrary_detail(request, pk):
 
     uploaded_pdfs = list(course.pdfs.all())
 
-    for idx, pdf in enumerate(uploaded_pdfs):
-        pdf.is_first_pdf = (idx == 0)
-        pdf.can_access   = is_purchased or pdf.is_demo or pdf.is_first_pdf
-
-        if pdf.can_access and pdf.dropbox_path:
-            # ── Generate a direct, login-free temporary link from Dropbox ──
-            # files_get_temporary_link returns a ~4-hour HTTPS URL that
-            # streams the file directly — no Dropbox account needed.
-            temp_link = DropboxManager.get_temporary_link(pdf.dropbox_path)
-            pdf.preview_url  = temp_link           # open in browser / iframe
-            pdf.download_url = temp_link            # same link triggers download
-        elif pdf.can_access and pdf.pdf_file:
-            # Fallback: file stored locally (e.g. during local development)
-            pdf.preview_url  = pdf.pdf_file.url
-            pdf.download_url = pdf.pdf_file.url
+    for idx, file in enumerate(uploaded_pdfs):
+        file.is_first_pdf = (idx == 0)
+        file.can_access   = is_purchased or file.is_demo or file.is_first_pdf
+        # Build the Django-hosted proxy URL — no Dropbox link ever reaches the browser
+        if file.can_access:
+            from django.urls import reverse
+            file.preview_url  = reverse('elibrary_pdf_preview', args=[str(file.id)])
+            file.download_url = reverse('elibrary_pdf_preview', args=[str(file.id)]) + '?dl=1'
         else:
-            pdf.preview_url  = None
-            pdf.download_url = None
+            file.preview_url  = None
+            file.download_url = None
 
     return render(request, 'elibrary_detail.html', {
         'pdf': course,
@@ -929,6 +908,91 @@ def elibrary_detail(request, pk):
         'footer': _get_footer(),
         'cart_count': len(request.session.get('cart', {})),
     })
+
+
+# ── PDF Proxy / Streaming view ─────────────────────────────────────────────────────────
+def elibrary_pdf_preview(request, pdf_id):
+    """
+    Stream a PDF file directly from Dropbox through Django.
+
+    The user's browser only ever talks to THIS server — Dropbox is never
+    exposed to the client, so no login wall can appear.
+
+    Access rules (same as elibrary_detail):
+      - is_demo=True  → public (no login needed)
+      - first PDF of the course  → public
+      - all others  → authenticated + paid order required
+
+    ?dl=1 query param → Content-Disposition: attachment (download)
+    default          → Content-Disposition: inline  (open in browser)
+    """
+    from .models import OrderItem
+
+    pdf = get_object_or_404(ELibraryPDF, id=pdf_id, is_active=True)
+
+    # ── Determine if this is the first PDF of its course ──────────────────────
+    first_pdf = (
+        ELibraryPDF.objects
+        .filter(course=pdf.course, is_active=True)
+        .order_by('uploaded_at')
+        .values_list('id', flat=True)
+        .first()
+    )
+    is_first = str(first_pdf) == str(pdf_id)
+
+    # ── Access check ────────────────────────────────────────────────────
+    can_access = pdf.is_demo or is_first
+    if not can_access:
+        if not request.user.is_authenticated:
+            raise Http404
+        can_access = OrderItem.objects.filter(
+            order__user=request.user,
+            order__is_paid=True,
+            item_type='pdf',
+            item_id=str(pdf.course_id)
+        ).exists()
+    if not can_access:
+        raise Http404
+
+    # ── Determine disposition ───────────────────────────────────────────────
+    force_download = request.GET.get('dl') == '1'
+    filename       = f"{pdf.pdf_name}.pdf" if not pdf.pdf_name.lower().endswith('.pdf') else pdf.pdf_name
+    disposition    = f'attachment; filename="{filename}"' if force_download else f'inline; filename="{filename}"'
+
+    # ── Source 1: Dropbox ───────────────────────────────────────────────────
+    if pdf.dropbox_path:
+        try:
+            dbx  = DropboxManager.get_dropbox_client()
+            path = pdf.dropbox_path if pdf.dropbox_path.startswith('/') else '/' + pdf.dropbox_path
+            _metadata, response = dbx.files_download(path)
+
+            # Stream 64 KB chunks so RAM stays low even for large PDFs
+            CHUNK = 64 * 1024
+            def _iter_content():
+                while True:
+                    chunk = response.raw.read(CHUNK)
+                    if not chunk:
+                        break
+                    yield chunk
+
+            streaming = StreamingHttpResponse(_iter_content(), content_type='application/pdf')
+            streaming['Content-Disposition'] = disposition
+            if hasattr(_metadata, 'size') and _metadata.size:
+                streaming['Content-Length'] = str(_metadata.size)
+            return streaming
+
+        except Exception:
+            # Fall through to local file fallback
+            pass
+
+    # ── Source 2: local FileField (dev / fallback) ───────────────────────────
+    if pdf.pdf_file:
+        from django.http import FileResponse
+        response = FileResponse(pdf.pdf_file.open('rb'), content_type='application/pdf')
+        response['Content-Disposition'] = disposition
+        return response
+
+    raise Http404
 
 
 # ── Apply Coupon (homepage “Save to Cart” button) ───────────────────────────────
