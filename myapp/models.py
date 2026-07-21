@@ -129,7 +129,7 @@ class AboutSetting(models.Model):
     feature2_title = models.CharField(max_length=100, default="Exam Targeted")
     feature2_desc = models.TextField(default="Curated content for NEET, JEE, UPSC, SSC, and more.")
     feature3_icon = models.CharField(max_length=50, default="fa-solid fa-comments")
-    feature3_icon_color = models.CharField(max_width=20, default="#ffc107")
+    feature3_icon_color = models.CharField(max_length=20, default="#ffc107")
     feature3_title = models.CharField(max_length=100, default="Support")
     feature3_desc = models.TextField(default="Support available on WhatsApp during working hours.")
     is_active = models.BooleanField(default=True)
