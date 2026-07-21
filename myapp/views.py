@@ -22,7 +22,7 @@ import uuid
 from .models import *
 from .forms import *
 
-from .dropbox_utils import DropboxManager
+from .dropbox_utils import DropboxManager, DropboxPaths
 from .pdf_utils import compress_pdf, human_size
 import os
 from django.core.files.base import ContentFile
@@ -323,7 +323,11 @@ def hard_book_add(request):
         if form.is_valid():
             book = form.save()
             for i, file_obj in enumerate(files[:5], start=1):
-                result = DropboxManager.upload_file(file_obj=file_obj, file_name=f"{book.title.replace(' ', '_')}_{i}_{file_obj.name}", folder_path='hardbooks/images')
+                result = DropboxManager.upload_file(
+                    file_obj=file_obj,
+                    file_name=f"{book.title.replace(' ', '_')}_{i}_{file_obj.name}",
+                    folder_path=DropboxPaths.hardbooks_images(),
+                )
                 if result['success']:
                     HardBookImage.objects.create(book=book, image=file_obj, dropbox_path=result['dropbox_path'])
                 else:
@@ -346,7 +350,11 @@ def hard_book_edit(request, pk):
             book            = form.save()
             available_slots = max(0, 5 - book.images.count())
             for i, file_obj in enumerate(files[:available_slots], start=1):
-                result = DropboxManager.upload_file(file_obj=file_obj, file_name=f"{book.title.replace(' ', '_')}_{i}_{file_obj.name}", folder_path='hardbooks/images')
+                result = DropboxManager.upload_file(
+                    file_obj=file_obj,
+                    file_name=f"{book.title.replace(' ', '_')}_{i}_{file_obj.name}",
+                    folder_path=DropboxPaths.hardbooks_images(),
+                )
                 if result['success']:
                     HardBookImage.objects.create(book=book, image=file_obj, dropbox_path=result['dropbox_path'])
                 else:
@@ -394,7 +402,18 @@ def elibrary_add(request):
     if request.method == 'POST':
         form = ELibraryForm(request.POST, request.FILES)
         if form.is_valid():
-            form.save()
+            course = form.save(commit=False)
+            # Upload thumbnail to BoosterNotes/eLibrary/<course>/Images/
+            if 'thumbnail' in request.FILES:
+                thumb_file = request.FILES['thumbnail']
+                result = DropboxManager.upload_file(
+                    file_obj=thumb_file,
+                    file_name=thumb_file.name,
+                    folder_path=DropboxPaths.elibrary_images(course.name),
+                )
+                if result['success']:
+                    course.dropbox_thumbnail_path = result['dropbox_path']
+            course.save()
             messages.success(request, 'E-Library course added successfully!')
             return redirect('elibrary_dashboard')
         messages.error(request, 'Please correct the errors below.')
@@ -409,7 +428,18 @@ def elibrary_edit(request, pk):
     if request.method == 'POST':
         form = ELibraryForm(request.POST, request.FILES, instance=course)
         if form.is_valid():
-            form.save()
+            course = form.save(commit=False)
+            # Re-upload thumbnail if a new one was provided
+            if 'thumbnail' in request.FILES:
+                thumb_file = request.FILES['thumbnail']
+                result = DropboxManager.upload_file(
+                    file_obj=thumb_file,
+                    file_name=thumb_file.name,
+                    folder_path=DropboxPaths.elibrary_images(course.name),
+                )
+                if result['success']:
+                    course.dropbox_thumbnail_path = result['dropbox_path']
+            course.save()
             messages.success(request, 'E-Library course updated successfully!')
             return redirect('elibrary_dashboard')
         messages.error(request, 'Please correct the errors below.')
@@ -434,7 +464,9 @@ from django.conf import settings
 def elibrary_upload_pdf(request, pk):
     """
     Upload a PDF for an eLibrary course.
+
     The file is compressed (losslessly) before being sent to Dropbox.
+    Storage path: BoosterNotes/eLibrary/<course name>/PDFs/<filename>
     """
     course = get_object_or_404(ELibraryModel, pk=pk)
     if request.method == 'POST':
@@ -443,20 +475,22 @@ def elibrary_upload_pdf(request, pk):
             uploaded_file = request.FILES['pdf_file']
             original_name = uploaded_file.name
 
+            # ─ compress before upload ───────────────────────────────────────────
             compressed_bytes, orig_size, comp_size, method = compress_pdf(uploaded_file)
             saved_pct = round((1 - comp_size / orig_size) * 100) if orig_size else 0
 
-            compressed_file = ContentFile(compressed_bytes, name=original_name)
+            compressed_file      = ContentFile(compressed_bytes, name=original_name)
             compressed_file.size = comp_size
 
+            # ─ upload to organised Dropbox folder ────────────────────────────
             result = DropboxManager.upload_file(
                 compressed_file,
                 original_name,
-                f"{settings.DROPBOX_FOLDER}/pdfs/{course.id}"
+                folder_path=DropboxPaths.elibrary_pdfs(course.name),
             )
 
             if result['success']:
-                pdf = form.save(commit=False)
+                pdf              = form.save(commit=False)
                 pdf.course       = course
                 pdf.dropbox_path = result['dropbox_path']
                 pdf.save()
@@ -1060,107 +1094,4 @@ def apply_coupon(request):
     request.session['applied_coupon_code']   = coupon.code
     request.session['applied_coupon_amount'] = str(coupon.amount)
     messages.success(request, f"\u2705 Coupon '{coupon.code}' saved! \u20b9{coupon.amount} discount will apply at checkout.")
-    return redirect(redirect_url)
-
-
-# ── Admin Dashboard ─────────────────────────────────────────────────────────────
-@login_required
-def dashboard(request):
-    if not request.user.is_staff and not request.user.is_superuser:
-        messages.error(request, "You don't have permission.")
-        return redirect('home')
-
-    users = User.objects.only('id', 'username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'date_joined').order_by('-date_joined')
-    total_users     = users.count()
-    active_users    = users.filter(is_active=True).count()
-    inactive_users  = users.filter(is_active=False).count()
-    thirty_days_ago = datetime.now() - timedelta(days=30)
-    new_users       = users.filter(date_joined__gte=thirty_days_ago).count()
-    staff_users     = users.filter(is_staff=True).count()
-
-    from .models import Order
-    total_revenue    = Order.objects.filter(is_paid=True).aggregate(r=Sum('grand_total'))['r'] or 0
-    completed_orders = Order.objects.filter(status='paid').count()
-    pending_orders   = Order.objects.filter(status='pending').count()
-    failed_orders    = Order.objects.filter(status='cancelled').count()
-    recent_transactions = Order.objects.select_related('user').prefetch_related('items').order_by('-created_at')[:10]
-
-    return render(request, 'admin_dashboard.html', {
-        'users': users, 'total_users': total_users,
-        'active_users': active_users, 'inactive_users': inactive_users,
-        'new_users': new_users, 'staff_users': staff_users,
-        'form': CustomUserCreationForm(),
-        'total_revenue': total_revenue,
-        'completed_orders': completed_orders,
-        'pending_orders': pending_orders,
-        'failed_orders': failed_orders,
-        'recent_transactions': recent_transactions,
-    })
-
-
-# ── Auth ────────────────────────────────────────────────────────────────────────────
-def user_login(request):
-    if request.user.is_authenticated:
-        return redirect('home')
-    if request.method == 'POST':
-        email    = request.POST.get('email', '').strip().lower()
-        password = request.POST.get('password')
-        try:
-            user_obj = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
-            messages.error(request, 'No account found with that email address.')
-            return redirect('login')
-        user = authenticate(request, username=user_obj.username, password=password)
-        if user is not None:
-            login(request, user)
-            messages.success(request, 'Login successful!')
-            return redirect(request.POST.get('next') or request.GET.get('next') or 'home')
-        messages.error(request, 'Incorrect password. Please try again.')
-        return redirect('login')
-    return render(request, 'login.html')
-
-
-def signup(request):
-    if request.user.is_authenticated:
-        return redirect('home')
-    if request.method == 'POST':
-        full_name = request.POST.get('name', '').strip()
-        email     = request.POST.get('email', '').strip().lower()
-        password  = request.POST.get('password', '').strip()
-
-        if not full_name or not email or not password:
-            messages.error(request, 'All fields are required.')
-            return redirect('signup')
-
-        if len(password) < 6:
-            messages.error(request, 'Password must be at least 6 characters.')
-            return redirect('signup')
-
-        if User.objects.filter(email__iexact=email).exists():
-            messages.error(request, 'An account with this email already exists. Please login.')
-            return redirect('signup')
-
-        username = email
-
-        try:
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=full_name,
-                is_staff=False,
-                is_superuser=False,
-            )
-            login(request, user)
-            messages.success(request, f'Welcome, {full_name}! Your account has been created.')
-            return redirect('home')
-        except Exception as e:
-            messages.error(request, 'Something went wrong. Please try again.')
-            return redirect('signup')
-
-    return render(request, 'signup.html')
-
-
-# ── Custom 404 — works even with DEBUG=True ──────────────────────────────────────
-def custom_404_view(request, unknown_path=None):
-    return render(request, '404.html', status=404)
+    return redirec

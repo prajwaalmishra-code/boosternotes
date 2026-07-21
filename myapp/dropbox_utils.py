@@ -1,9 +1,84 @@
 import os
+import re
 import time
 import dropbox
 from django.conf import settings
 from dropbox import Dropbox, exceptions
 from dropbox.exceptions import ApiError
+
+
+# ── Canonical path builder ────────────────────────────────────────────────────────────
+class DropboxPaths:
+    """
+    Single source of truth for every Dropbox folder/path used in the app.
+
+    Dropbox structure produced:
+
+        BoosterNotes/
+        ├── Backups/
+        │   ├── db_latest.sqlite3
+        │   └── db_20260721_153000.sqlite3
+        ├── eLibrary/
+        │   ├── <Course Name>/
+        │   │   ├── Images/
+        │   │   │   └── thumbnail.jpg
+        │   │   └── PDFs/
+        │   │       ├── Chapter 1.pdf
+        │   │       └── ...
+        │   └── <Course Name 2>/
+        │       └── ...
+        └── HardBooks/
+            └── Images/
+                └── ...
+    """
+
+    ROOT = "BoosterNotes"
+
+    # ─ top-level folders ─────────────────────────────────────────────────────────
+    BACKUPS   = f"{ROOT}/Backups"
+    ELIBRARY  = f"{ROOT}/eLibrary"
+    HARDBOOKS = f"{ROOT}/HardBooks"
+
+    @staticmethod
+    def _slug(name: str) -> str:
+        """Turn an arbitrary string into a safe Dropbox folder name."""
+        # Replace characters Dropbox dislikes with underscores, collapse runs
+        safe = re.sub(r'[\\/:*?"<>|]+', '_', name).strip('. ')
+        safe = re.sub(r'_+', '_', safe)
+        return safe or 'Unnamed'
+
+    # ─ backup paths ────────────────────────────────────────────────────────────────
+    @classmethod
+    def backup_latest(cls) -> str:
+        """Full Dropbox path for the rolling latest DB backup."""
+        return f"/{cls.BACKUPS}/db_latest.sqlite3"
+
+    @classmethod
+    def backup_timestamped(cls, timestamp: str) -> str:
+        """Full Dropbox path for a timestamped DB backup."""
+        return f"/{cls.BACKUPS}/db_{timestamp}.sqlite3"
+
+    @classmethod
+    def backups_folder(cls) -> str:
+        """Folder path (no leading slash) used as the `folder_path` arg."""
+        return cls.BACKUPS
+
+    # ─ eLibrary paths ────────────────────────────────────────────────────────────
+    @classmethod
+    def elibrary_pdfs(cls, course_name: str) -> str:
+        """Folder path (no leading slash) for a course's PDFs."""
+        return f"{cls.ELIBRARY}/{cls._slug(course_name)}/PDFs"
+
+    @classmethod
+    def elibrary_images(cls, course_name: str) -> str:
+        """Folder path (no leading slash) for a course's Images."""
+        return f"{cls.ELIBRARY}/{cls._slug(course_name)}/Images"
+
+    # ─ HardBook paths ────────────────────────────────────────────────────────────
+    @classmethod
+    def hardbooks_images(cls) -> str:
+        """Folder path (no leading slash) for hard-book images."""
+        return f"{cls.HARDBOOKS}/Images"
 
 
 class DropboxManager:
@@ -17,7 +92,7 @@ class DropboxManager:
             app_secret=settings.DROPBOX_APP_SECRET,
         )
 
-    # ── helpers ────────────────────────────────────────────────────────────────
+    # ── helpers ──────────────────────────────────────────────────────────────────────────
     @staticmethod
     def _read_chunk(file_obj, size):
         """Read exactly `size` bytes (or fewer at EOF)."""
@@ -36,7 +111,7 @@ class DropboxManager:
                     time.sleep(backoff * (attempt + 1))
         raise last_exc
 
-    # ── public API ─────────────────────────────────────────────────────────────
+    # ── public API ─────────────────────────────────────────────────────────────────────
     @staticmethod
     def get_temporary_link(dropbox_path):
         """
@@ -64,6 +139,12 @@ class DropboxManager:
         Upload a file to Dropbox using simple upload for files <= 4 MB,
         and upload sessions (chunked) for larger files.
 
+        `folder_path` should be a path string WITHOUT a leading slash, e.g.:
+            DropboxPaths.elibrary_pdfs(course.name)
+            DropboxPaths.elibrary_images(course.name)
+            DropboxPaths.hardbooks_images()
+            DropboxPaths.backups_folder()
+
         Returns a dict with keys: success, dropbox_path, link, message / error.
         """
         try:
@@ -81,7 +162,7 @@ class DropboxManager:
             CHUNK_SIZE = 4 * 1024 * 1024        # 4 MB
 
             if file_size <= CHUNK_SIZE:
-                # ── simple upload ─────────────────────────────────────────────
+                # ── simple upload ──────────────────────────────────────────────────────
                 DropboxManager._upload_with_retry(
                     dbx.files_upload,
                     file_obj.read(),
@@ -89,7 +170,7 @@ class DropboxManager:
                     mode=dropbox.files.WriteMode.overwrite,
                 )
             else:
-                # ── chunked upload session ────────────────────────────────────
+                # ── chunked upload session ──────────────────────────────────────────
                 # 1. Start session with the first chunk
                 first_chunk = DropboxManager._read_chunk(file_obj, CHUNK_SIZE)
                 session = DropboxManager._upload_with_retry(
@@ -130,7 +211,7 @@ class DropboxManager:
 
                     offset += len(chunk)
 
-            # ── create / fetch shared link ─────────────────────────────────────
+            # ── create / fetch shared link ─────────────────────────────────────────
             try:
                 shared = dbx.sharing_create_shared_link_with_settings(full_path)
                 link   = shared.url

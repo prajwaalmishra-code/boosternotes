@@ -2,9 +2,7 @@ import os
 import dropbox
 from datetime import datetime
 from django.conf import settings
-
-DROPBOX_BACKUP_PATH = '/db-backups/db_latest.sqlite3'
-DROPBOX_HISTORY_DIR = '/db-backups/history'
+from .dropbox_utils import DropboxPaths
 
 
 def get_dropbox_client():
@@ -24,10 +22,10 @@ def get_db_path():
 
 def backup_to_dropbox():
     """
-    Uploads db.sqlite3 to Dropbox.
+    Uploads db.sqlite3 to Dropbox under BoosterNotes/Backups/.
     Saves two copies:
-      1. /db-backups/db_latest.sqlite3  (always overwritten)
-      2. /db-backups/history/db_YYYYMMDD_HHMMSS.sqlite3 (timestamped copy)
+      1. BoosterNotes/Backups/db_latest.sqlite3       (always overwritten)
+      2. BoosterNotes/Backups/db_YYYYMMDD_HHMMSS.sqlite3  (timestamped)
     Returns the timestamp string on success.
     """
     dbx = get_dropbox_client()
@@ -38,18 +36,17 @@ def backup_to_dropbox():
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    # Overwrite latest
+    # Overwrite rolling latest
     dbx.files_upload(
         data,
-        DROPBOX_BACKUP_PATH,
+        DropboxPaths.backup_latest(),
         mode=dropbox.files.WriteMode.overwrite
     )
 
     # Save timestamped history copy
-    history_path = f"{DROPBOX_HISTORY_DIR}/db_{timestamp}.sqlite3"
     dbx.files_upload(
         data,
-        history_path,
+        DropboxPaths.backup_timestamped(timestamp),
         mode=dropbox.files.WriteMode.add
     )
 
@@ -66,9 +63,9 @@ def restore_from_dropbox(history_filename=None):
     db_path = get_db_path()
 
     if history_filename:
-        path = f"{DROPBOX_HISTORY_DIR}/{history_filename}"
+        path = f"/{DropboxPaths.BACKUPS}/{history_filename}"
     else:
-        path = DROPBOX_BACKUP_PATH
+        path = DropboxPaths.backup_latest()
 
     _, res = dbx.files_download(path)
 
@@ -78,16 +75,20 @@ def restore_from_dropbox(history_filename=None):
 
 def list_backups():
     """
-    Returns a list of timestamped backup filenames from Dropbox history folder,
-    sorted newest first.
+    Returns a list of timestamped backup filenames from BoosterNotes/Backups/,
+    sorted newest first.  Excludes the rolling 'db_latest.sqlite3' entry.
     """
     dbx = get_dropbox_client()
+    folder = f"/{DropboxPaths.BACKUPS}"
     try:
-        result = dbx.files_list_folder(DROPBOX_HISTORY_DIR)
+        result = dbx.files_list_folder(folder)
         files = [
             entry.name
             for entry in result.entries
-            if isinstance(entry, dropbox.files.FileMetadata)
+            if (
+                isinstance(entry, dropbox.files.FileMetadata)
+                and entry.name != 'db_latest.sqlite3'
+            )
         ]
         return sorted(files, reverse=True)
     except dropbox.exceptions.ApiError:
