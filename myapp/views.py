@@ -891,7 +891,6 @@ def elibrary_detail(request, pk):
     for idx, file in enumerate(uploaded_pdfs):
         file.is_first_pdf = (idx == 0)
         file.can_access   = is_purchased or file.is_demo or file.is_first_pdf
-        # Build the Django-hosted proxy URL — no Dropbox link ever reaches the browser
         if file.can_access:
             from django.urls import reverse
             file.preview_url  = reverse('elibrary_pdf_preview', args=[str(file.id)])
@@ -910,6 +909,22 @@ def elibrary_detail(request, pk):
     })
 
 
+# ── helpers ──────────────────────────────────────────────────────────────────────────
+def _pdf_unavailable_response(request, pdf_name=''):
+    """
+    Return a polished 503 HTML page telling the user the PDF is
+    temporarily unavailable.  No traceback, file path, or internal
+    detail is ever exposed.
+    """
+    ctx = {
+        'pdf_name' : pdf_name,
+        'navbar'   : _get_navbar(),
+        'footer'   : _get_footer(),
+        'cart_count': len(request.session.get('cart', {})),
+    }
+    return render(request, 'pdf_unavailable.html', ctx, status=503)
+
+
 # ── PDF Proxy / Streaming view ─────────────────────────────────────────────────────────
 def elibrary_pdf_preview(request, pdf_id):
     """
@@ -918,29 +933,34 @@ def elibrary_pdf_preview(request, pdf_id):
     The user's browser only ever talks to THIS server — Dropbox is never
     exposed to the client, so no login wall can appear.
 
-    Access rules (same as elibrary_detail):
-      - is_demo=True  → public (no login needed)
-      - first PDF of the course  → public
+    Access rules:
+      - is_demo=True or first PDF of course → public (no login needed)
       - all others  → authenticated + paid order required
 
-    ?dl=1 query param → Content-Disposition: attachment (download)
-    default          → Content-Disposition: inline  (open in browser)
+    Error handling:
+      ANY failure while fetching the file from Dropbox or from the local
+      filesystem (FileNotFoundError, Dropbox ApiError, network error,
+      missing path, etc.) is caught and returns a user-friendly 503 page.
+      No traceback or internal path is ever exposed to the browser.
+
+    ?dl=1  → Content-Disposition: attachment (download)
+    default → Content-Disposition: inline   (open in browser)
     """
     from .models import OrderItem
 
     pdf = get_object_or_404(ELibraryPDF, id=pdf_id, is_active=True)
 
-    # ── Determine if this is the first PDF of its course ──────────────────────
-    first_pdf = (
+    # ── 1. First-PDF check ──────────────────────────────────────────────────
+    first_pdf_id = (
         ELibraryPDF.objects
         .filter(course=pdf.course, is_active=True)
         .order_by('uploaded_at')
         .values_list('id', flat=True)
         .first()
     )
-    is_first = str(first_pdf) == str(pdf_id)
+    is_first = str(first_pdf_id) == str(pdf_id)
 
-    # ── Access check ────────────────────────────────────────────────────
+    # ── 2. Access check ────────────────────────────────────────────────────
     can_access = pdf.is_demo or is_first
     if not can_access:
         if not request.user.is_authenticated:
@@ -954,45 +974,54 @@ def elibrary_pdf_preview(request, pdf_id):
     if not can_access:
         raise Http404
 
-    # ── Determine disposition ───────────────────────────────────────────────
+    # ── 3. Disposition header ───────────────────────────────────────────────
     force_download = request.GET.get('dl') == '1'
-    filename       = f"{pdf.pdf_name}.pdf" if not pdf.pdf_name.lower().endswith('.pdf') else pdf.pdf_name
-    disposition    = f'attachment; filename="{filename}"' if force_download else f'inline; filename="{filename}"'
+    raw_name   = pdf.pdf_name or 'document'
+    filename   = raw_name if raw_name.lower().endswith('.pdf') else raw_name + '.pdf'
+    disposition = (
+        f'attachment; filename="{filename}"'
+        if force_download else
+        f'inline; filename="{filename}"'
+    )
 
-    # ── Source 1: Dropbox ───────────────────────────────────────────────────
+    # ── 4. Source A: Dropbox ─────────────────────────────────────────────────
     if pdf.dropbox_path:
         try:
             dbx  = DropboxManager.get_dropbox_client()
             path = pdf.dropbox_path if pdf.dropbox_path.startswith('/') else '/' + pdf.dropbox_path
+
+            # ── Eagerly download the entire file before building the response.
+            # This guarantees that ANY exception (FileNotFoundError, ApiError,
+            # network timeout, quota exceeded, etc.) is raised HERE, inside
+            # this try/except block, and can be turned into a clean error page.
+            # A lazy StreamingHttpResponse would raise the exception inside the
+            # WSGI iterator — after the response is already returned — making
+            # it impossible to catch and render a friendly page instead.
             _metadata, response = dbx.files_download(path)
+            pdf_bytes = response.content   # reads all bytes; raises on any failure
 
-            # Stream 64 KB chunks so RAM stays low even for large PDFs
-            CHUNK = 64 * 1024
-            def _iter_content():
-                while True:
-                    chunk = response.raw.read(CHUNK)
-                    if not chunk:
-                        break
-                    yield chunk
-
-            streaming = StreamingHttpResponse(_iter_content(), content_type='application/pdf')
-            streaming['Content-Disposition'] = disposition
-            if hasattr(_metadata, 'size') and _metadata.size:
-                streaming['Content-Length'] = str(_metadata.size)
-            return streaming
+            http_response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            http_response['Content-Disposition'] = disposition
+            http_response['Content-Length']      = str(len(pdf_bytes))
+            return http_response
 
         except Exception:
-            # Fall through to local file fallback
+            # ── Fall through to local-file fallback, then to the
+            # user-friendly unavailable page.
             pass
 
-    # ── Source 2: local FileField (dev / fallback) ───────────────────────────
+    # ── 4b. Source B: local FileField (dev / fallback) ──────────────────────
     if pdf.pdf_file:
-        from django.http import FileResponse
-        response = FileResponse(pdf.pdf_file.open('rb'), content_type='application/pdf')
-        response['Content-Disposition'] = disposition
-        return response
+        try:
+            from django.http import FileResponse
+            response = FileResponse(pdf.pdf_file.open('rb'), content_type='application/pdf')
+            response['Content-Disposition'] = disposition
+            return response
+        except Exception:
+            pass
 
-    raise Http404
+    # ── 5. Both sources failed — show the user-friendly error page ──────────
+    return _pdf_unavailable_response(request, pdf_name=pdf.pdf_name)
 
 
 # ── Apply Coupon (homepage “Save to Cart” button) ───────────────────────────────

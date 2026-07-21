@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Unavailable — BoosterNotes</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      background:#f4f6fb;
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+    }
+
+    /* ── Minimal navbar strip ───────────────────────────────────────────── */
+    .top-bar{
+      background:#1a3a8f;
+      padding:14px 24px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      color:#fff;
+      font-size:1.1rem;
+      font-weight:700;
+      letter-spacing:.3px;
+    }
+    .top-bar a{color:#fff;text-decoration:none}
+    .top-bar .sep{opacity:.4;margin:0 4px}
+
+    /* ── Main card ──────────────────────────────────────────────────────── */
+    .page-wrap{
+      flex:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:40px 16px;
+    }
+
+    .card{
+      background:#fff;
+      border-radius:20px;
+      box-shadow:0 12px 48px rgba(26,58,143,.10);
+      max-width:520px;
+      width:100%;
+      padding:48px 40px 40px;
+      text-align:center;
+    }
+
+    .icon-wrap{
+      width:80px;
+      height:80px;
+      border-radius:50%;
+      background:linear-gradient(135deg,#fff3f3 0%,#ffe4e4 100%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      margin:0 auto 24px;
+      font-size:2rem;
+      color:#e84444;
+      border:2px solid #ffd0d0;
+    }
+
+    h1{
+      font-size:1.35rem;
+      color:#1a3a8f;
+      font-weight:700;
+      margin-bottom:14px;
+      line-height:1.35;
+    }
+
+    .subtitle{
+      font-size:.95rem;
+      color:#4b5563;
+      line-height:1.7;
+      margin-bottom:10px;
+    }
+
+    .pdf-name{
+      display:inline-block;
+      background:#f0f4ff;
+      color:#1a3a8f;
+      font-weight:600;
+      font-size:.88rem;
+      padding:4px 14px;
+      border-radius:20px;
+      margin-bottom:28px;
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .divider{
+      border:none;
+      border-top:1px solid #eef0f6;
+      margin:24px 0;
+    }
+
+    .help-row{
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      text-align:left;
+      margin-bottom:14px;
+      background:#f8faff;
+      border-radius:12px;
+      padding:14px 16px;
+    }
+    .help-row .hi{
+      flex-shrink:0;
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      background:#e8eeff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#1a3a8f;
+      font-size:.85rem;
+    }
+    .help-row .ht{
+      font-size:.88rem;
+      color:#374151;
+      line-height:1.55;
+    }
+    .help-row .ht strong{
+      color:#1a3a8f;
+      display:block;
+      margin-bottom:2px;
+    }
+
+    /* ── Action buttons ─────────────────────────────────────────────────── */
+    .btn-group{
+      display:flex;
+      gap:12px;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin-top:28px;
+    }
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:11px 22px;
+      border-radius:10px;
+      font-size:.9rem;
+      font-weight:600;
+      text-decoration:none;
+      cursor:pointer;
+      border:none;
+      transition:all .18s;
+    }
+    .btn-primary{
+      background:#1a3a8f;
+      color:#fff;
+    }
+    .btn-primary:hover{background:#142d72;transform:translateY(-1px)}
+    .btn-secondary{
+      background:#f0f4ff;
+      color:#1a3a8f;
+      border:1.5px solid #d0daff;
+    }
+    .btn-secondary:hover{background:#e4ecff;transform:translateY(-1px)}
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @media(max-width:480px){
+      .card{padding:36px 22px 30px}
+      h1{font-size:1.18rem}
+      .btn-group{flex-direction:column;align-items:stretch}
+      .btn{justify-content:center}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Minimal branded top bar -->
+  <div class="top-bar">
+    <a href="/">
+      {% if navbar and navbar.brand_name %}{{ navbar.brand_name }}{% else %}BoosterNotes{% endif %}
+    </a>
+    <span class="sep">/</span>
+    <span style="font-weight:400;font-size:.95rem;opacity:.85">PDF Unavailable</span>
+  </div>
+
+  <div class="page-wrap">
+    <div class="card">
+
+      <!-- Icon -->
+      <div class="icon-wrap">
+        <i class="fa-solid fa-file-circle-exclamation"></i>
+      </div>
+
+      <!-- Heading -->
+      <h1>This PDF is currently unavailable</h1>
+
+      {% if pdf_name %}
+        <span class="pdf-name"><i class="fa-regular fa-file-pdf" style="margin-right:5px"></i>{{ pdf_name }}</span>
+      {% endif %}
+
+      <!-- Human-readable explanation -->
+      <p class="subtitle">
+        We couldn’t load this PDF right now. This is usually caused by
+        <strong>insufficient storage space</strong> in the file system, or a
+        temporary issue connecting to the document server.
+      </p>
+
+      <hr class="divider">
+
+      <!-- What to do -->
+      <div class="help-row">
+        <div class="hi"><i class="fa-solid fa-headset"></i></div>
+        <div class="ht">
+          <strong>Contact the Administrator</strong>
+          Reach out via WhatsApp or email so the admin can free up storage
+          or re-upload the file.
+        </div>
+      </div>
+
+      <div class="help-row">
+        <div class="hi"><i class="fa-solid fa-rotate-right"></i></div>
+        <div class="ht">
+          <strong>Try Again Later</strong>
+          The issue may resolve itself once storage space is cleared.
+          Refresh this page in a few minutes.
+        </div>
+      </div>
+
+      <!-- CTA buttons -->
+      <div class="btn-group">
+        <a href="javascript:history.back()" class="btn btn-secondary">
+          <i class="fa-solid fa-arrow-left"></i> Go Back
+        </a>
+        <a href="/" class="btn btn-primary">
+          <i class="fa-solid fa-house"></i> Home
+        </a>
+        <a href="javascript:location.reload()" class="btn btn-secondary">
+          <i class="fa-solid fa-rotate-right"></i> Retry
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>
