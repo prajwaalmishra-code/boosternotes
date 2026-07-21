@@ -105,8 +105,8 @@ CACHES = {
 }
 
 # ── Razorpay (Test Mode) ──────────────────────────────────────────────────────
-RAZORPAY_KEY_ID = 'rzp_test_RaygzMDa8nwFFP'
-RAZORPAY_KEY_SECRET = 'F1mtVXEvOvbyc6atPUAEwdZd'
+RAZORPAY_KEY_ID = 'rzp_live_TE9Wu5HGT8tqOs'
+RAZORPAY_KEY_SECRET = '76hmR6Ptnol1qB9mGkMyhT9y'
 
 # ── Dropbox ───────────────────────────────────────────────────────────────────
 DROPBOX_APP_KEY       = "wgg2fsw5pf16x8q"
@@ -117,6 +117,8 @@ DROPBOX_FOLDER = '/elibrary'
 CSRF_TRUSTED_ORIGINS = [
     "https://www.boosternotes.in",
     "https://boosternotes-production.up.railway.app",
+    "https://www.ganeshsirclasses.online",
+    
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
