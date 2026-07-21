@@ -24,7 +24,7 @@
       </div>
       <form method="post" enctype="multipart/form-data" class="custom-form">
         {% csrf_token %}
-        
+
         {% if form.non_field_errors %}
         <div class="custom-alert custom-alert-error">{{ form.non_field_errors }}</div>
         {% endif %}
@@ -43,12 +43,12 @@
 
         <div class="custom-grid-2">
           <div class="custom-group">
-            <label>Original Price (₹)</label>
+            <label>Original Price (&#8377;)</label>
             {{ form.original_price }}
             <div class="custom-error">{{ form.original_price.errors }}</div>
           </div>
           <div class="custom-group">
-            <label>Current Price (₹)</label>
+            <label>Current Price (&#8377;)</label>
             {{ form.current_price }}
             <div class="custom-error">{{ form.current_price.errors }}</div>
           </div>
@@ -71,8 +71,10 @@
         <div class="custom-group">
           <div class="checkbox-row">
             {{ form.is_active }}
-            <label>Active</label>
+            <label for="{{ form.is_active.id_for_label }}">Is Active</label>
           </div>
+          <div class="custom-error">{{ form.is_active.errors }}</div>
+          <small class="help-text">Enable to make course visible on the site</small>
         </div>
 
         <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Course</button>
@@ -95,12 +97,13 @@
 .custom-group { display: flex; flex-direction: column; gap: 6px; }
 .custom-group label { font-size: 0.86rem; font-weight: 600; color: #333; }
 .custom-group input, .custom-group textarea, .custom-group select { width: 100%; padding: 10px 14px; border: 1.5px solid #dde2ee; border-radius: 8px; font-size: 0.88rem; font-family: 'Poppins', sans-serif; }
+.custom-group input[type="checkbox"] { width: auto; padding: 0; border: none; }
 .custom-group input:focus, .custom-group textarea:focus, .custom-group select:focus { outline: none; border-color: #1a3a8f; background: #f8f9ff; }
 .custom-error { color: #e84444; font-size: 0.8rem; margin-top: 4px; min-height: 14px; }
 .help-text { font-size: 0.75rem; color: #888; margin-top: 4px; }
 .checkbox-row { display: flex; align-items: center; gap: 10px; }
 .checkbox-row label { font-size: 0.88rem; color: #333; cursor: pointer; margin: 0; font-weight: 500; }
-.checkbox-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: #1a3a8f; }
+.checkbox-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: #1a3a8f; flex-shrink: 0; }
 .custom-alert { padding: 12px 14px; border-radius: 10px; margin-bottom: 1rem; font-size: 0.85rem; }
 .custom-alert-success { background: #e8f8e8; border: 1px solid #d8f8d8; color: #2e7d32; }
 .custom-alert-error { background: #ffe8e8; border: 1px solid #ffd8d8; color: #e84444; }

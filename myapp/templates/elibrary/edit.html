@@ -2,14 +2,12 @@
 {% block content1 %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-
 <div class="custom-page">
   <div class="custom-container">
     <div class="custom-header">
       <h1><i class="fa-solid fa-pen"></i> Edit Course</h1>
       <a href="{% url 'elibrary_dashboard' %}" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back</a>
     </div>
-
 
     {% if messages %}
     <div class="messages">
@@ -19,18 +17,16 @@
     </div>
     {% endif %}
 
-
     <div class="custom-card">
       <div class="card-header">
         <h2><i class="fa-solid fa-book"></i> Update Course Info</h2>
       </div>
       <form method="post" enctype="multipart/form-data" class="custom-form">
         {% csrf_token %}
-        
+
         {% if form.non_field_errors %}
         <div class="custom-alert custom-alert-error">{{ form.non_field_errors }}</div>
         {% endif %}
-
 
         <div class="custom-group">
           <label>Course Name</label>
@@ -39,7 +35,6 @@
           <small class="help-text">Enter course name</small>
         </div>
 
-
         <div class="custom-group">
           <label>Description</label>
           {{ form.description }}
@@ -47,22 +42,19 @@
           <small class="help-text">Describe the course content</small>
         </div>
 
-
         <div class="custom-group">
-          <label>Original Price (₹)</label>
+          <label>Original Price (&#8377;)</label>
           {{ form.original_price }}
           <div class="custom-error">{{ form.original_price.errors }}</div>
           <small class="help-text">Original price before discount</small>
         </div>
 
-
         <div class="custom-group">
-          <label>Current Price (₹)</label>
+          <label>Current Price (&#8377;)</label>
           {{ form.current_price }}
           <div class="custom-error">{{ form.current_price.errors }}</div>
           <small class="help-text">Current selling price</small>
         </div>
-
 
         <div class="custom-group">
           <label>Category</label>
@@ -70,7 +62,6 @@
           <div class="custom-error">{{ form.category.errors }}</div>
           <small class="help-text">Select course category</small>
         </div>
-
 
         <div class="custom-group">
           <label>Thumbnail Image</label>
@@ -82,19 +73,17 @@
             <small style="color: #888; display: block; margin-top: 4px;">Current thumbnail</small>
           </div>
           {% endif %}
-          <small class="help-text">Upload new thumbnail (jpg, png - max 5MB)</small>
+          <small class="help-text">Upload new thumbnail (jpg, png &mdash; max 5MB)</small>
         </div>
-
 
         <div class="custom-group">
-          <label>
+          <div class="checkbox-row">
             {{ form.is_active }}
-            <span style="font-weight: 600;">Is Active</span>
-          </label>
+            <label for="{{ form.is_active.id_for_label }}">Is Active</label>
+          </div>
           <div class="custom-error">{{ form.is_active.errors }}</div>
-          <small class="help-text">Enable to make course visible</small>
+          <small class="help-text">Enable to make course visible on the site</small>
         </div>
-
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> Save Changes</button>
@@ -102,9 +91,8 @@
         </div>
       </form>
     </div>
-  </div>
 </div>
-
+</div>
 
 <style>
 .custom-page { padding: 1.5rem; max-width: 700px; margin: 0 auto; }
@@ -112,17 +100,21 @@
 .custom-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
 .custom-header h1 { font-size: 1.6rem; font-weight: 700; color: #1a1a2e; margin: 0; display: flex; align-items: center; gap: 10px; }
 .custom-header h1 i { color: #1a3a8f; }
-.custom-card { background: #fff; border: 1px solid #e7ebf5; border-radius: 16px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(1a,58,143,0.04); }
+.custom-card { background: #fff; border: 1px solid #e7ebf5; border-radius: 16px; padding: 1.5rem; box-shadow: 0 4px 12px rgba(26,58,143,0.04); }
 .card-header { margin-bottom: 1.2rem; padding-bottom: 0.8rem; border-bottom: 1px solid #f0f2f8; }
 .card-header h2 { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; margin: 0; display: flex; align-items: center; gap: 8px; }
 .custom-form { display: flex; flex-direction: column; gap: 1rem; }
 .custom-group { display: flex; flex-direction: column; gap: 6px; }
 .custom-group label { font-size: 0.86rem; font-weight: 600; color: #333; }
 .custom-group input, .custom-group textarea, .custom-group select { width: 100%; padding: 10px 14px; border: 1.5px solid #dde2ee; border-radius: 8px; font-size: 0.88rem; font-family: 'Poppins', sans-serif; }
+.custom-group input[type="checkbox"] { width: auto; padding: 0; border: none; }
 .custom-group input:focus, .custom-group textarea:focus, .custom-group select:focus { outline: none; border-color: #1a3a8f; background: #f8f9ff; }
 .custom-group textarea { resize: vertical; min-height: 100px; }
 .custom-error { color: #e84444; font-size: 0.8rem; margin-top: 4px; min-height: 14px; }
 .help-text { font-size: 0.75rem; color: #888; margin-top: 4px; }
+.checkbox-row { display: flex; align-items: center; gap: 10px; }
+.checkbox-row label { font-size: 0.88rem; color: #333; cursor: pointer; margin: 0; font-weight: 500; }
+.checkbox-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: #1a3a8f; flex-shrink: 0; }
 .form-actions { display: flex; gap: 10px; margin-top: 1rem; padding-top: 1.2rem; border-top: 1px solid #f0f2f8; }
 .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: 8px; font-weight: 600; border: none; text-decoration: none; }
 .btn-primary { background: linear-gradient(135deg, #1a3a8f, #0d2060); color: #fff; }
