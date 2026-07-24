@@ -129,7 +129,12 @@ def _build_cart_items(cart):
             elif item_type == 'book' and item_id in book_map:
                 obj       = book_map[item_id]
                 first_img = next(iter(obj.images.all()), None)
-                thumb     = first_img.image.url if first_img and first_img.image else None
+                thumb     = None
+                if first_img:
+                    if first_img.dropbox_path:
+                        thumb = DropboxManager.get_temporary_link(first_img.dropbox_path)
+                    elif first_img.image:
+                        thumb = first_img.image.url
                 items.append({'id': key, 'item_type': 'Physical Book', 'name': obj.title, 'thumbnail': thumb, 'category': '', 'price': obj.price, 'original_price': obj.original_price})
         except Exception:
             pass
@@ -300,6 +305,15 @@ def search(request):
 @login_required
 def hard_books_list(request):
     books = HardBook.objects.prefetch_related('images').all()
+    # Attach Dropbox preview URLs to each image
+    for book in books:
+        for img in book.images.all():
+            if img.dropbox_path:
+                img.preview_url = DropboxManager.get_temporary_link(img.dropbox_path)
+            elif img.image:
+                img.preview_url = img.image.url
+            else:
+                img.preview_url = None
     return render(request, 'hard_books_list.html', {'books': books})
 
 
@@ -308,6 +322,15 @@ def hard_books_public(request):
     books = HardBook.objects.filter(is_active=True).prefetch_related(
         Prefetch('images', queryset=HardBookImage.objects.order_by('uploaded_at'))
     ).order_by('-created_at')
+    # Attach Dropbox preview URLs
+    for book in books:
+        for img in book.images.all():
+            if img.dropbox_path:
+                img.preview_url = DropboxManager.get_temporary_link(img.dropbox_path)
+            elif img.image:
+                img.preview_url = img.image.url
+            else:
+                img.preview_url = None
     return render(request, 'hard_books_public.html', {
         'books': books,
         'navbar': _get_navbar(),
@@ -365,7 +388,17 @@ def hard_book_edit(request, pk):
         messages.error(request, 'Please correct the errors below.')
     else:
         form = HardBookForm(instance=book)
-    return render(request, 'hard_book_form.html', {'form': form, 'book': book})
+    # Attach Dropbox preview URLs for edit page
+    existing_images = []
+    for img in book.images.all():
+        if img.dropbox_path:
+            img.preview_url = DropboxManager.get_temporary_link(img.dropbox_path)
+        elif img.image:
+            img.preview_url = img.image.url
+        else:
+            img.preview_url = None
+        existing_images.append(img)
+    return render(request, 'hard_book_form.html', {'form': form, 'book': book, 'existing_images': existing_images})
 
 
 @login_required
@@ -380,11 +413,14 @@ def hard_book_delete(request, pk):
 @login_required
 def hard_book_image_delete(request, pk):
     img = get_object_or_404(HardBookImage, pk=pk)
+    book_pk = img.book.pk
     if request.method == 'POST':
-        DropboxManager.delete_file(img.dropbox_path)
+        if img.dropbox_path:
+            DropboxManager.delete_file(img.dropbox_path)
         img.delete()
         messages.success(request, 'Image deleted successfully!')
-    return redirect('hard_books_list')
+        return redirect('hard_book_edit', pk=book_pk)
+    return redirect('hard_book_edit', pk=book_pk)
 
 
 # ── E-Library (admin) ────────────────────────────────────────────────────────────
@@ -461,17 +497,6 @@ from django.conf import settings
 
 @login_required
 def elibrary_upload_pdf(request, pk):
-    """
-    Upload a PDF for an eLibrary course.
-
-    The file is compressed (losslessly) before being sent to Dropbox.
-    Storage path: BoosterNotes/eLibrary/<course name>/PDFs/<filename>
-
-    After a successful upload the view returns a JSON response with
-    `redirect` pointing to this same upload page (the correct named URL
-    `elibrary_upload_pdf`) so the AJAX handler in the template can
-    navigate the browser there without hitting a 404.
-    """
     course = get_object_or_404(ELibraryModel, pk=pk)
     if request.method == 'POST':
         form = ELibraryPDFForm(request.POST, request.FILES)
@@ -531,10 +556,6 @@ def elibrary_pdf_delete(request, pk):
 
 @login_required
 def elibrary_pdf_replace(request, pk):
-    """
-    Replace an existing PDF file for a course while keeping its metadata
-    (title, demo flag, order) intact.
-    """
     pdf = get_object_or_404(ELibraryPDF, pk=pk)
     course = pdf.course
     if request.method == 'POST':
@@ -543,7 +564,6 @@ def elibrary_pdf_replace(request, pk):
             messages.error(request, 'Please select a PDF file to upload.')
             return redirect('elibrary_upload_pdf', pk=str(course.pk))
 
-        # Delete old file from Dropbox
         if pdf.dropbox_path:
             DropboxManager.delete_file(pdf.dropbox_path)
 
@@ -580,11 +600,6 @@ def elibrary_pdf_replace(request, pk):
 @login_required
 @require_POST
 def elibrary_pdf_reorder(request, pk):
-    """
-    Accept a JSON body `{"order": ["<uuid>", "<uuid>", ...]}` and update
-    the `display_order` (or `uploaded_at`-based ordering) of PDFs for a course.
-    Falls back gracefully if the model has no `display_order` field.
-    """
     course = get_object_or_404(ELibraryModel, pk=pk)
     import json
     try:
@@ -598,7 +613,6 @@ def elibrary_pdf_reorder(request, pk):
 
     pdfs = {str(p.id): p for p in ELibraryPDF.objects.filter(course=course)}
 
-    # Support a `display_order` integer field if it exists, otherwise no-op
     has_display_order = hasattr(ELibraryPDF, 'display_order')
     updated = []
     for position, pdf_id in enumerate(ordered_ids, start=1):
@@ -956,6 +970,14 @@ def home(request):
     popular_pdfs = ELibraryModel.objects.filter(is_active=True).select_related('category').only('id', 'name', 'current_price', 'original_price', 'thumbnail', 'category_id').order_by('-created_at')[:8]
 
     hard_books = HardBook.objects.filter(is_active=True).prefetch_related(Prefetch('images', queryset=HardBookImage.objects.order_by('uploaded_at'))).order_by('-created_at')[:8]
+    for book in hard_books:
+        for img in book.images.all():
+            if img.dropbox_path:
+                img.preview_url = DropboxManager.get_temporary_link(img.dropbox_path)
+            elif img.image:
+                img.preview_url = img.image.url
+            else:
+                img.preview_url = None
 
     return render(request, 'index.html', {
         'navbar': navbar, 'site_settings': navbar,
@@ -975,7 +997,15 @@ def hard_book_detail(request, pk):
         ),
         pk=pk, is_active=True
     )
-    book_images = list(book.images.all())
+    book_images = []
+    for img in book.images.all():
+        if img.dropbox_path:
+            img.preview_url = DropboxManager.get_temporary_link(img.dropbox_path)
+        elif img.image:
+            img.preview_url = img.image.url
+        else:
+            img.preview_url = None
+        book_images.append(img)
     return render(request, 'hard_book_detail.html', {
         'book': book,
         'book_images': book_images,
@@ -986,11 +1016,6 @@ def hard_book_detail(request, pk):
 
 
 def elibrary_detail(request, pk):
-    """
-    Public course detail page.
-    Passes a Django-hosted proxy URL for each accessible PDF so the
-    browser NEVER talks to Dropbox directly.
-    """
     from .models import Order, OrderItem
     course = get_object_or_404(
         ELibraryModel.objects.select_related('category').prefetch_related(
@@ -1033,11 +1058,6 @@ def elibrary_detail(request, pk):
 
 # ── helpers ──────────────────────────────────────────────────────────────────────────
 def _pdf_unavailable_response(request, pdf_name=''):
-    """
-    Return a polished 503 HTML page telling the user the PDF is
-    temporarily unavailable.  No traceback, file path, or internal
-    detail is ever exposed.
-    """
     ctx = {
         'pdf_name' : pdf_name,
         'navbar'   : _get_navbar(),
@@ -1049,17 +1069,6 @@ def _pdf_unavailable_response(request, pdf_name=''):
 
 # ── PDF Proxy / Streaming view ─────────────────────────────────────────────────────────
 def elibrary_pdf_preview(request, pdf_id):
-    """
-    Stream a PDF file directly from Dropbox through Django.
-
-    Access rules:
-      - is_staff / is_superuser     -> always granted (admin preview)
-      - is_demo=True or first PDF   -> public (no login needed)
-      - all others                  -> authenticated + paid order required
-
-    ?dl=1  -> Content-Disposition: attachment (download)
-    default -> Content-Disposition: inline   (open in browser)
-    """
     from .models import OrderItem
 
     pdf = get_object_or_404(ELibraryPDF, id=pdf_id, is_active=True)
@@ -1124,7 +1133,7 @@ def elibrary_pdf_preview(request, pdf_id):
     return _pdf_unavailable_response(request, pdf_name=pdf.pdf_name)
 
 
-# ── Apply Coupon (homepage "Save to Cart" button) ───────────────────────────────
+# ── Apply Coupon (homepage) ───────────────────────────────────────────────────────
 @login_required
 @require_POST
 def apply_coupon(request):
@@ -1258,6 +1267,6 @@ def signup(request):
     return render(request, 'signup.html')
 
 
-# ── Custom 404 ── works even with DEBUG=True ──────────────────────────────────────
+# ── Custom 404 ──────────────────────────────────────────────────────────────────
 def custom_404_view(request, unknown_path=None):
     return render(request, '404.html', status=404)

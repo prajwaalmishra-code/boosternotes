@@ -5,16 +5,37 @@
     <div class="custom-header">
       <a href="{% url 'hard_books_list' %}" class="btn btn-secondary" style="margin-right: 12px;">← Back</a>
       <div>
-        <h1>📚 Hard Books Upload</h1>
-        <p style="margin: 6px 0 0 0;">Add or update hard books and up to 5 images</p>
+        <h1>📚 {% if book %}Edit Hard Book{% else %}Add Hard Book{% endif %}</h1>
+        <p style="margin: 6px 0 0 0;">{% if book %}Update book details and manage images{% else %}Add a new hard book with up to 5 images{% endif %}</p>
       </div>
     </div>
 
+    {% include "msg.html" %}
+
+    {% if book and existing_images %}
+    <div class="custom-card">
+      <h3 style="margin-bottom:1rem;font-size:1rem;color:#1a3a8f;">📷 Existing Images ({{ existing_images|length }}/5)</h3>
+      <div class="img-grid">
+        {% for img in existing_images %}
+        <div class="img-card">
+          {% if img.preview_url %}
+            <img src="{{ img.preview_url }}" alt="Book image" class="img-thumb">
+          {% else %}
+            <div class="img-no-preview">No Preview</div>
+          {% endif %}
+          <form method="post" action="{% url 'hard_book_image_delete' img.id %}" onsubmit="return confirm('Remove this image?')" style="margin-top:6px;">
+            {% csrf_token %}
+            <button type="submit" class="btn-remove-img">🗑 Remove</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     <div class="custom-card">
       <form method="post" enctype="multipart/form-data" class="custom-form">
         {% csrf_token %}
-
 
         <div class="custom-group">
           <label>Book Title</label>
@@ -22,13 +43,11 @@
           <div class="custom-error">{{ form.title.errors }}</div>
         </div>
 
-
         <div class="custom-group">
           <label>Description</label>
           {{ form.description }}
           <div class="custom-error">{{ form.description.errors }}</div>
         </div>
-
 
         <div class="custom-grid-2">
           <div class="custom-group">
@@ -43,29 +62,46 @@
           </div>
         </div>
 
-
+        {% if book %}
+          {% with slots=5|add:"-0" %}
+          {% if existing_images|length < 5 %}
+          <div class="custom-group">
+            <label>Add More Images ({{ existing_images|length }}/5 used — {{ 5|add:"-0" }} max)</label>
+            <input type="file" name="images" class="form-input" accept="image/*" multiple>
+            <small style="color:#777;">You can add up to {{ existing_images|length|add:"-5"|slice:"1:" }} more image(s).</small>
+          </div>
+          {% else %}
+          <div class="custom-group">
+            <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:10px 14px;color:#795548;font-size:0.9rem;">
+              ⚠️ Maximum 5 images reached. Remove an existing image to add a new one.
+            </div>
+          </div>
+          {% endif %}
+          {% endwith %}
+        {% else %}
         <div class="custom-group">
           <label>Book Images (max 5)</label>
           <input type="file" name="images" class="form-input" accept="image/*" multiple>
           <small style="color:#777;">You can select up to 5 images.</small>
         </div>
-
+        {% endif %}
 
         <div class="custom-group">
-          <div class="checkbox-row">
-            {{ form.is_active }}
-            <label>Active</label>
-          </div>
+          <label class="toggle-label">
+            <span class="toggle-text">Active</span>
+            <div class="toggle-wrapper">
+              {{ form.is_active }}
+              <span class="toggle-hint">{% if form.is_active.value %}Book is visible to users{% else %}Book is hidden from users{% endif %}</span>
+            </div>
+          </label>
           <div class="custom-error">{{ form.is_active.errors }}</div>
         </div>
 
-
-        <button type="submit" class="btn btn-primary">💾 Save Hard Book</button>
+        <button type="submit" class="btn btn-primary">💾 {% if book %}Update Hard Book{% else %}Save Hard Book{% endif %}</button>
       </form>
     </div>
   </div>
 </div>
-
 
 <style>
 .custom-form-page { padding: 1.5rem; max-width: 900px; margin: 0 auto; }
@@ -77,8 +113,23 @@
 .custom-group { display: flex; flex-direction: column; gap: 6px; }
 .form-input { padding: 10px 14px; border: 1.5px solid #dde2ee; border-radius: 8px; }
 .custom-error { color: #e84444; font-size: 0.8rem; }
-.checkbox-row { display: flex; align-items: center; gap: 10px; }
-.btn { display:inline-flex; align-items:center; justify-content:center; padding:12px 22px; border:none; border-radius:8px; text-decoration:none; }
+
+/* Active toggle */
+.toggle-label { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; padding: 12px 16px; background: #f8f9fa; border: 1.5px solid #dde2ee; border-radius: 10px; }
+.toggle-text { font-weight: 600; color: #1a3a8f; min-width: 50px; padding-top: 2px; }
+.toggle-wrapper { display: flex; align-items: center; gap: 10px; }
+.toggle-wrapper input[type="checkbox"] { width: 18px; height: 18px; accent-color: #1a3a8f; cursor: pointer; flex-shrink: 0; }
+.toggle-hint { font-size: 0.82rem; color: #777; }
+
+/* Existing images grid */
+.img-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.img-card { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.img-thumb { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #e0e4ee; }
+.img-no-preview { width: 80px; height: 80px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #999; text-align: center; }
+.btn-remove-img { background: #fff1f1; color: #dc3545; border: 1px solid #ffd6d6; border-radius: 6px; padding: 4px 10px; font-size: 0.78rem; font-weight: 600; cursor: pointer; width: 100%; transition: background 0.2s; }
+.btn-remove-img:hover { background: #ffe1e1; }
+
+.btn { display:inline-flex; align-items:center; justify-content:center; padding:12px 22px; border:none; border-radius:8px; text-decoration:none; font-weight:600; cursor:pointer; }
 .btn-primary { background:#1a3a8f; color:#fff; }
 .btn-secondary { background:#f5f7fa; color:#333; border:1px solid #dde2ee; }
 .btn-secondary:hover { background:#e9edf5; transform: translateY(-1px); }
